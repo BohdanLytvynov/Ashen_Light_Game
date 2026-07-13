@@ -1,0 +1,23 @@
+# Temp folders of the assembler and the Engine
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+.ue4dependency/
+
+# Visual Studio Files
+.vs/
+*.sln
+*.suo
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
+
+# Logs and user configs
+Saved/*
+Intermediate/*
+
+# Custom apps
+UnrealBinariesRebuildHelperTool.exe
