@@ -5,6 +5,7 @@
 #include "MotionControllerComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "HeadMountedDisplayFunctionLibrary.h"
 
 AVRCharacter::AVRCharacter(const FObjectInitializer& init) : Super(init)
 {
@@ -21,6 +22,7 @@ AVRCharacter::AVRCharacter(const FObjectInitializer& init) : Super(init)
 	CameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera Component"));
 	if (!CameraComponent) return;
 	CameraComponent->SetupAttachment(VROriginComponent);
+	CameraComponent->bUsePawnControlRotation = false;
 	//Right motion Controller
 	RightMotionController = CreateDefaultSubobject<UMotionControllerComponent>(TEXT("Right Motion Controller"));
 	if (!RightMotionController) return;
@@ -42,7 +44,7 @@ void AVRCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
-
+	UHeadMountedDisplayFunctionLibrary::SetTrackingOrigin(EHMDTrackingOrigin::Floor);
 }
 
 void AVRCharacter::Tick(float DeltaTime)
