@@ -48,6 +48,12 @@ AVRCharacter::AVRCharacter(const FObjectInitializer& init) : Super(init)
 	CapsuleCollisionComponent->SetNotifyRigidBodyCollision(true);
 	CapsuleCollisionComponent->SetCollisionObjectType(ECollisionChannel::ECC_Pawn);
 
+	//Skeletal mesh component
+	SkeletalMeshComponent = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("Skeletal Mesh Component"));
+	if (!SkeletalMeshComponent) return;
+	SkeletalMeshComponent->SetupAttachment(CapsuleCollisionComponent);
+	SkeletalMeshComponent->HideBoneByName(FName(HeadBoneName), EPhysBodyOp::PBO_None);
+
 	//Right motion Controller
 	RightMotionController = CreateDefaultSubobject<UMotionControllerComponent>(TEXT("Right Motion Controller"));
 	if (!RightMotionController) return;
@@ -184,6 +190,12 @@ void AVRCharacter::RecenterTrackingSpaceToLocation(FVector TargetWorldLocation)
 void AVRCharacter::RecenterTrackingSpaceToActor()
 {
 	RecenterTrackingSpaceToLocation(GetActorLocation());
+}
+
+float AVRCharacter::GetGroundVelocityRatio() const
+{
+	if (!PawnMovement || FMath::IsNearlyZero(runSpeed)) return 0.f;
+	return FMath::Clamp(PawnMovement->Velocity.Size2D() / runSpeed, 0.f, 1.f);
 }
 
 void AVRCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)

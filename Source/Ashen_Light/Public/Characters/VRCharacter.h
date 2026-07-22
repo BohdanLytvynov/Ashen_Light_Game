@@ -129,6 +129,9 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "VR Camera Fade", meta = (DisplayName = "Camera Fade Distance", ClampMin = "0.001", UIMin = "0.001"))
 	float CameraFadeDistance = 5.f;
 
+	UPROPERTY(EditAnywhere, Category = "VR IK", meta = (Tooltip = "Name of the head bone in Skeletal Mesh."))
+	FString HeadBoneName = "head";
+
 	UPROPERTY()
 	AActor* CurrentObstacle = nullptr;
 
@@ -183,6 +186,28 @@ public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 	
+	float GetGroundVelocityRatio() const;
+
+	FORCEINLINE UCameraComponent* GetVRCamera() const
+	{
+		return CameraComponent;
+	}
+
+	FORCEINLINE USkeletalMeshComponent* GetMesh() const
+	{
+		return SkeletalMeshComponent;
+	}
+
+	FORCEINLINE UMotionControllerComponent* GetLeftMotionController() const
+	{
+		return LeftMotionController;
+	}
+
+	FORCEINLINE UMotionControllerComponent* GetRightMotionController() const
+	{
+		return RightMotionController;
+	}
+
 private:
 	float leftHandSpeed;
 	float rightHandSpeed;
