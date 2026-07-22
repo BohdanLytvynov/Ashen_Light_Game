@@ -3,6 +3,7 @@
 
 #include "Characters/CharacterBase.h"
 #include "Components/CapsuleComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 // Sets default values
 ACharacterBase::ACharacterBase(const FObjectInitializer& init) : Super(init)
@@ -18,11 +19,30 @@ void ACharacterBase::BeginPlay()
 	
 }
 
+void ACharacterBase::UpdateGroundSpeed()
+{
+	UCharacterMovementComponent* charMv = this->GetCharacterMovement();
+	if (!charMv) return;
+	const FVector& currSpeed = charMv->Velocity;
+	FVector2D GroundVelocity(currSpeed.X, currSpeed.Y);
+	const float groundVelMagnitude = GroundVelocity.Size();
+	const float maxWalkSpeed = charMv->MaxWalkSpeed;
+	if (maxWalkSpeed == 0) return;
+	GroundSpeed = FMath::Clamp(groundVelMagnitude / maxWalkSpeed, 0.f, 1.f);
+}
+
+FVector ACharacterBase::GetLocalPositionRelativeToOrigin(USceneComponent* origin, USceneComponent* component)
+{	
+	if (!origin || !component) return FVector::ZeroVector;
+	return origin->GetComponentTransform().InverseTransformPosition(component->GetComponentLocation());
+}
+
 // Called every frame
 void ACharacterBase::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	UpdateGroundSpeed();
 }
 
 // Called to bind functionality to input
