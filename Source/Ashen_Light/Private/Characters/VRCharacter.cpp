@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Characters/VRCharacter.h"
@@ -11,6 +11,8 @@
 #include "Components/WidgetInteractionComponent.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Misc/CoreDelegates.h"
+#include "../../Public/Animations/VRCharacterAnimInstance.h"
+#include "IXRTrackingSystem.h"
 
 
 AVRCharacter::AVRCharacter(const FObjectInitializer& init) : Super(init)
@@ -29,7 +31,7 @@ AVRCharacter::AVRCharacter(const FObjectInitializer& init) : Super(init)
 	if (!CameraComponent) return;
 	CameraComponent->SetupAttachment(TrackingSpaceOrigin);
 	CameraComponent->bUsePawnControlRotation = false;//Don't send orientation from the camera to the Pawn
-	CameraComponent->bLockToHmd = true;//Bind Transform of the HMD to the Camera in Tracking Space
+	
 	//Camera Fade Component
 	CameraFadeComponent = CreateDefaultSubobject<UStaticMeshComponent>("Camera Fade Component");
 	if (!CameraFadeComponent) return;
@@ -57,6 +59,7 @@ AVRCharacter::AVRCharacter(const FObjectInitializer& init) : Super(init)
 	SkeletalMeshComponent = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("Skeletal Mesh Component"));
 	if (!SkeletalMeshComponent) return;
 	SkeletalMeshComponent->SetupAttachment(CapsuleCollisionComponent);
+	SkeletalMeshComponent->SetReceivesDecals(false);
 
 	//Right motion Controller
 	RightMotionController = CreateDefaultSubobject<UMotionControllerComponent>(TEXT("Right Motion Controller"));
@@ -88,6 +91,7 @@ AVRCharacter::AVRCharacter(const FObjectInitializer& init) : Super(init)
 	if (!DeadZoneDecalComponent) return;	
 	DeadZoneDecalComponent->SetRelativeRotation(FRotator(-90.f, 0.f, 0.f));//Rotate it, so X axis will be pointed down
 	DeadZoneDecalComponent->SetupAttachment(TrackingSpaceOrigin);
+	
 	//Active Zone Decal
 	ActiveZoneComponent = CreateDefaultSubobject<UDecalComponent>(TEXT("Active Zone Decal Component"));
 	if (!ActiveZoneComponent) return;	
@@ -104,49 +108,59 @@ AVRCharacter::AVRCharacter(const FObjectInitializer& init) : Super(init)
 
 	bIsObstacleHit = false;
 
-	CurrentCharacterState = EVRCharacterState::VRCS_FreeRoam;
+	CurrentCharacterState = EVRCharacterState::VRCS_Blocked;//Set this first to have an opportunity to recalibrate position
+	CachedCharacterState = EVRCharacterState::VRCS_FreeRoam;//We need to switch to Free Roam when game starts
 	bCanPerformBattleStep = false;
 	bCanRun = false;
 
 	CurrentVelocity = FVector::ZeroVector;
 	PrevCameraPosition = FVector::ZeroVector;
-
+	initialPlayerHeightCalculated = false;
 	bCameraInAMesh = false;
-	bVirtControllerLocked = false;
 }
 
 void AVRCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-	//Set Tracking origin to Floor.When the game starts the camera will be placed in the center of the Tracking Space idealy. 
-	//Then it will be rised up according to the distance to the floor in the real room
-	UHeadMountedDisplayFunctionLibrary::SetTrackingOrigin(EHMDTrackingOrigin::Floor);
-	//Bind to the Recenter event
-	FCoreDelegates::VRHeadsetRecenter.AddUObject(this, &AVRCharacter::OnHMD_Recentered);
-	FTimerHandle SpawnRecenterTimerHandle;
-	//Try to move Tracking Space root to the position of the HMD
-	GetWorldTimerManager().SetTimer(
-		SpawnRecenterTimerHandle,
-		this,
-		&AVRCharacter::RecenterTrackingSpaceToActor,
-		0.15f,
-		false
-	);
-	//Initialize dynamic material instance to controll parameters during runtime (Opacity)
-	if (FadeMaterialBase)
+	bool isInVR = GEngine && GEngine->XRSystem.IsValid() && GEngine->XRSystem->IsHeadTrackingAllowed();
+	//We are in VR Preview Mode
+	if (isInVR)
 	{
-		FadeDynamicMaterial = UMaterialInstanceDynamic::Create(FadeMaterialBase, this);
-		if (CameraFadeComponent && FadeDynamicMaterial)
+		//Set Tracking origin to Floor.When the game starts the camera will be placed in the center of the Tracking Space idealy. 
+		//Then it will be rised up according to the distance to the floor in the real room, 
+		// we also need to wait some period of time for proper initialization
+		UHeadMountedDisplayFunctionLibrary::SetTrackingOrigin(EHMDTrackingOrigin::Floor);
+		//Bind to the Recenter event
+		FCoreDelegates::VRHeadsetRecenter.AddUObject(this, &AVRCharacter::OnHMD_Recentered);
+		if (CameraComponent)
 		{
-			CameraFadeComponent->SetMaterial(0, FadeDynamicMaterial);
+			InitialPlayerHeight = CameraComponent->GetRelativeLocation().Z;
+			CameraComponent->bLockToHmd = true;//Bind Transform of the HMD to the Camera in Tracking Space
 		}
 	}
+	else//Other PIE mode (Simulation)
+	{
+		if (CameraComponent)
+		{
+			CameraComponent->bLockToHmd = false;
+			CameraComponent->SetRelativeLocation(FVector(0.f, 0.f, PlayerPreviewHeight));
+			InitialPlayerHeight = PlayerPreviewHeight;
+		}
+	}
+
+	//Initialize dynamic material instance to controll parameters during runtime
+	ApplyMaterialToComponent(CameraFadeComponent, 0, FadeMaterialBase, FadeDynamicMaterial);
+	ApplyMaterialToComponent(ActiveZoneComponent, ActiveZoneMaterialBase, ActiveZoneMaterialInstance);
+	ApplyMaterialToComponent(DeadZoneDecalComponent, DeadZoneMaterialBase, DeadZoneMaterialInstance);
+	ApplyMaterialToComponent(PlayerAnchorDecalComponent, VRSliderMaterialBase, VRSliderMaterialInstance);
+	
 	//Configure Decals
 	ConfigureDecal(DeadZoneDecalComponent, DeadZoneHeight, DeadZoneRadius, true);
 	ConfigureDecal(ActiveZoneComponent, ActiveZoneHeight, ActiveZoneRadius, true);
 	ConfigureDecal(PlayerAnchorDecalComponent, PlayerAnchorZoneHeight, PlayerAnchorZoneRadius, true);
 
 	//Set Initial Location of the motion controllers and Camera in Tracking Space when the game begins
+	//Need this for Velocity Calculations
 	if (LeftMotionController)
 	{
 		prevLeftHandLocation = LeftMotionController->GetRelativeLocation();
@@ -203,6 +217,24 @@ void AVRCharacter::RecenterTrackingSpaceToActor()
 	RecenterTrackingSpaceToLocation(GetActorLocation());
 }
 
+UVRCharacterAnimInstance* AVRCharacter::GetCharAnimInstance()
+{
+	//If anim instance wasn't initialized
+	if (!VRCharacterAnimInstance)
+	{
+		//Get skeletal mesh component
+		USkeletalMeshComponent* skelMesh = GetMesh();
+		if (!skelMesh) return VRCharacterAnimInstance;
+		//Get Anim Instance
+		UAnimInstance* inst = skelMesh->GetAnimInstance();
+		if (!inst) return VRCharacterAnimInstance;
+		//Convert Anim instance
+		VRCharacterAnimInstance = Cast<UVRCharacterAnimInstance>(inst);
+	}
+	
+	return VRCharacterAnimInstance;
+}
+
 float AVRCharacter::GetGroundVelocityRatio() const
 {
 	if (!PawnMovement || FMath::IsNearlyZero(runSpeed)) return 0.f;
@@ -210,13 +242,94 @@ float AVRCharacter::GetGroundVelocityRatio() const
 	return FMath::Clamp(PawnMovement->Velocity.Size2D() / runSpeed, 0.f, 1.f);
 }
 
+void AVRCharacter::ApplyMaterialToComponent(UPrimitiveComponent* comp, int32 matIndex, UMaterialInterface* materialBase, UMaterialInstanceDynamic*& dynamicInstance)
+{
+	if (!comp || !materialBase) return;
+	if (matIndex < 0 || matIndex >= comp->GetNumMaterials()) return;
+	dynamicInstance = CreateMaterialInstance(materialBase);
+	if (!dynamicInstance) return;
+	comp->SetMaterial(matIndex, dynamicInstance);
+}
+
+void AVRCharacter::ApplyMaterialToComponent(UDecalComponent* comp, UMaterialInterface* materialBase, UMaterialInstanceDynamic*& dynamicInstance)
+{
+	if (!comp || !materialBase) return;
+	dynamicInstance = CreateMaterialInstance(materialBase);
+	if (!dynamicInstance) return;	
+	comp->SetDecalMaterial(dynamicInstance);
+}
+
+void AVRCharacter::SetDecalColors()
+{
+	switch (CurrentCharacterState)
+	{
+	case EVRCharacterState::VRCS_Blocked:
+		SetDecalsColor(MovementLockedDecalColor);
+		break;
+	case EVRCharacterState::VRCS_FreeRoam:
+		SetDecalsColor(FreeRoamDecalColor);
+		break;
+	case EVRCharacterState::VRCS_Battle:
+		SetDecalsColor(BattleModeDecalColor);
+		break;
+	}
+}
+
+void AVRCharacter::SetDecalsColor(FLinearColor color)
+{
+	if (!VRSliderMaterialInstance) return;
+	VRSliderMaterialInstance->SetVectorParameterValue(FName("Slider Color"), color);
+	if (!DeadZoneMaterialInstance) return;
+	DeadZoneMaterialInstance->SetVectorParameterValue(FName("Emisive Color"), color);
+	if (!ActiveZoneMaterialInstance) return;
+	ActiveZoneMaterialInstance->SetVectorParameterValue(FName("Emisive Color"), color);
+}
+
+void AVRCharacter::CalculatePlayerHeight()
+{
+	if (!initialPlayerHeightCalculated && CameraComponent)
+	{
+		float CurrentCamZ = CameraComponent->GetRelativeLocation().Z;
+		if (CurrentCamZ > 80.0f)
+		{
+			InitialPlayerHeight = CurrentCamZ;
+			initialPlayerHeightCalculated = true;
+			UVRCharacterAnimInstance* inst = GetCharAnimInstance();
+			if (inst)
+			{
+				inst->CalculateUniversalScaleFactor(CurrentCamZ);
+
+			}
+		}
+	}
+}
+
+UMaterialInstanceDynamic* AVRCharacter::CreateMaterialInstance(UMaterialInterface* interface)
+{
+	if (!interface) return nullptr;
+	return UMaterialInstanceDynamic::Create(interface, this);
+}
+
 void AVRCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	if (!PlayerInputComponent) return;
 	//Setup binding
-	PlayerInputComponent->BindAction(FName("ToggleBattleMode"), IE_Pressed, this, &AVRCharacter::OnToggleBattleModePressed);
+	//Locomotion
+	PlayerInputComponent->BindAction(FName("ToggleBattleMode"), IE_Released, this, &AVRCharacter::OnToggleBattleModePressed);
 	PlayerInputComponent->BindAction(FName("ToggleRun"), IE_Pressed, this, &AVRCharacter::OnSprintPressed);
 	PlayerInputComponent->BindAction(FName("ToggleRun"), IE_Released, this, &AVRCharacter::OnSprintReleased);
+	//Grip Mechanics
+	PlayerInputComponent->BindAction(FName("GrabRight"), IE_Pressed, this, &AVRCharacter::OnRightGrabButtonPressed);
+	PlayerInputComponent->BindAction(FName("GrabRight"), IE_Released, this, &AVRCharacter::OnRightGrabButtonReleased);
+	PlayerInputComponent->BindAction(FName("GrabLeft"), IE_Pressed, this, &AVRCharacter::OnLeftGrabButtonPressed);
+	PlayerInputComponent->BindAction(FName("GrabLeft"), IE_Released, this, &AVRCharacter::OnLeftGrabButtonReleased);
+
+	PlayerInputComponent->BindAction(FName("TriggerRight"), IE_Pressed, this, &AVRCharacter::OnRightTriggerButtonPressed);
+	PlayerInputComponent->BindAction(FName("TriggerRight"), IE_Released, this, &AVRCharacter::OnRightTriggerButtonReleased);
+	PlayerInputComponent->BindAction(FName("TriggerLeft"), IE_Pressed, this, &AVRCharacter::OnLeftTriggerButtonPressed);
+	PlayerInputComponent->BindAction(FName("TriggerLeft"), IE_Released, this, &AVRCharacter::OnLeftTriggerButtonPressed);
+
+	PlayerInputComponent->BindAction(FName("BlockMovement"), IE_Released, this, &AVRCharacter::OnBlockMovementPressed);
 }
 
 void AVRCharacter::OnToggleBattleModePressed()
@@ -231,6 +344,8 @@ void AVRCharacter::OnToggleBattleModePressed()
 	{
 		CurrentCharacterState = EVRCharacterState::VRCS_FreeRoam;
 	}
+
+	SetDecalColors();
 }
 
 void AVRCharacter::OnSprintPressed()
@@ -241,6 +356,79 @@ void AVRCharacter::OnSprintPressed()
 void AVRCharacter::OnSprintReleased()
 {
 	bCanRun = false;//Disable run
+}
+
+void AVRCharacter::OnRightGrabButtonPressed()
+{
+	UVRCharacterAnimInstance* inst = GetCharAnimInstance();
+	if (!inst) return;
+	inst->DoGrab(true);
+}
+
+void AVRCharacter::OnRightGrabButtonReleased()
+{
+	UVRCharacterAnimInstance* inst = GetCharAnimInstance();
+	if (!inst) return;
+	inst->ReleaseGrab(true);
+}
+
+void AVRCharacter::OnLeftGrabButtonPressed()
+{
+	UVRCharacterAnimInstance* inst = GetCharAnimInstance();
+	if (!inst) return;
+	inst->DoGrab(false);
+}
+
+void AVRCharacter::OnLeftGrabButtonReleased()
+{
+	UVRCharacterAnimInstance* inst = GetCharAnimInstance();
+	if (!inst) return;
+	inst->ReleaseGrab(false);
+}
+
+void AVRCharacter::OnRightTriggerButtonPressed()
+{
+	UVRCharacterAnimInstance* inst = GetCharAnimInstance();
+	if (!inst) return;
+	inst->PressTrigger(true);
+}
+
+void AVRCharacter::OnRightTriggerButtonReleased()
+{
+	UVRCharacterAnimInstance* inst = GetCharAnimInstance();
+	if (!inst) return;
+	inst->ReleaseTrigger(true);
+}
+
+void AVRCharacter::OnLeftTriggerButtonPressed()
+{
+	UVRCharacterAnimInstance* inst = GetCharAnimInstance();
+	if (!inst) return;
+	inst->PressTrigger(false);
+}
+
+void AVRCharacter::OnLeftTriggerButtonReleased()
+{
+	UVRCharacterAnimInstance* inst = GetCharAnimInstance();
+	if (!inst) return;
+	inst->ReleaseTrigger(false);
+}
+
+void AVRCharacter::OnBlockMovementPressed()
+{
+	if (CurrentCharacterState == EVRCharacterState::VRCS_Battle || CurrentCharacterState == EVRCharacterState::VRCS_FreeRoam)
+	{
+		CachedCharacterState = CurrentCharacterState;
+		CurrentCharacterState = EVRCharacterState::VRCS_Blocked;
+	}
+	else if(CurrentCharacterState == EVRCharacterState::VRCS_Blocked)
+	{
+		CurrentCharacterState = CachedCharacterState;
+	}
+
+	CachedCharacterState = CurrentCharacterState;
+
+	SetDecalColors();
 }
 
 void AVRCharacter::RecalibrateCapsuleAndMeshComponent()
@@ -259,9 +447,11 @@ void AVRCharacter::RecalibrateCapsuleAndMeshComponent()
 	{
 		//Get the location of the skeletal mesh in a Capsule Space
 		FVector MeshLoc = SkeletalMeshComponent->GetRelativeLocation();
-		MeshLoc.Z = -halfHeight;//the root of the Skeletal mesh is located at the feet of the model we need to move it down to halfheight of the capsule
+		//the root of the Skeletal mesh is located at the feet of the model we need to move it down to halfheight of the capsule
+		//And the origin of the Skeletal Mesh is located not at the bottom of the foot it is raised up for some value
+		MeshLoc.Z = -halfHeight + (cameraHeadDelta / 2.f) + MeshOriginAdjustment;//Cause we resize mesh from the center
 		SkeletalMeshComponent->SetRelativeLocation(MeshLoc);
-	}
+	}	
 }
 
 void AVRCharacter::ConfigureDecal(UDecalComponent* decal, float thicknes, float r, bool redraw)
@@ -276,6 +466,7 @@ void AVRCharacter::ConfigureDecal(UDecalComponent* decal, float thicknes, float 
 
 void AVRCharacter::HandleMovement(float DeltaTime)
 {		
+	if (CurrentCharacterState == EVRCharacterState::VRCS_Blocked) return;
 	if (!CameraComponent) return;
 	//1 Get HMD Device coordinates in TrackSpace relative to the TrackSpace's origin
 	FVector CameraInTrackSpace = CameraComponent->GetRelativeLocation();
@@ -310,7 +501,7 @@ void AVRCharacter::HandleMovement(float DeltaTime)
 			else
 			{
 				//Calculate vector along the Static Mesh to slide across
-				WorldDirVector = FVector::VectorPlaneProject(WorldDirVector, ImpactNormal);
+				WorldDirVector = FVector::VectorPlaneProject(MovementDir, ImpactNormal);
 			}
 		}
 
@@ -384,14 +575,14 @@ void AVRCharacter::Run()
 
 void AVRCharacter::DetectGround()
 {
-	if (!CapsuleCollisionComponent) return;
-	//Get the Location of the Capsule Component in the World Space, it is the center of the Capsule
-	const FVector Start = CapsuleCollisionComponent->GetComponentLocation();
+	if (!CapsuleCollisionComponent) return;	
 	//Get the half height of the capsule. Must be recalculated cause we do recalibration according to the player height
 	const float HalfHeight = CapsuleCollisionComponent->GetScaledCapsuleHalfHeight();
+	//Get the Location of the Capsule Component in the World Space, it is the center of the Capsule and add Half of the Capsule to shift it up
+	const FVector Start = CapsuleCollisionComponent->GetComponentLocation() + FVector(0.f, 0.f, HalfHeight);
 	const float SphereRadius = 20.f;//Radius of the cast sphere
-	//End of the Trace. Sphere has the radius and the hit point will be located in the center of it sphere so we take it's raadius to account
-	const FVector End = Start - FVector(0.f, 0.f, HalfHeight - SphereRadius + GroundDetectionThreshold);
+	//End of the Trace. All the height of the Capsule + Some distance check threshold, 10 cm. For landscape curvatures
+	const FVector End = Start - FVector(0.f, 0.f, (HalfHeight * 2.f) + GroundDetectionThreshold);
 	//Perform trace
 	TArray<AActor*> IgnoreActors;
 	IgnoreActors.Add(this);
@@ -426,16 +617,35 @@ void AVRCharacter::DetectGround()
 void AVRCharacter::ApplyGravity(float DeltaTime)
 {
 	//Turn off gravity so we will not fall down when we walk through the mesh by our legs
-	if (bCameraInAMesh)
+	if (bCameraInAMesh) 
 	{
 		VerticalVelocity = 0.f;
 		return;
 	}
 
 	if (bIsGrounded)
-	{
-		//We set some negative velocity, so we try to place pawn on the floor 
+	{		
 		VerticalVelocity = -10.f;
+		//Update Z velocity
+		if (PawnMovement)
+		{
+			PawnMovement->Velocity.Z = VerticalVelocity;
+		}
+		//Get HalfHeight of the capsule component
+		const float ScaledHalfHeight = CapsuleCollisionComponent->GetScaledCapsuleHalfHeight();
+		//Calculate Bottom of the CapsuleComponent
+		const float CapsuleBottomZ = CapsuleCollisionComponent->GetComponentLocation().Z - ScaledHalfHeight;
+		//Calculate penetration depth
+		const float PenetrationDepth = CurrentGroundHit.ImpactPoint.Z - CapsuleBottomZ;
+		
+		if (!FMath::IsNearlyZero(PenetrationDepth))
+		{
+			//Calculate corect Actor Location
+			FVector CurrentLocation = GetActorLocation();
+			CurrentLocation.Z += PenetrationDepth;
+			//Turn off the physics detection, because we wil be stacked in the floor mesh
+			SetActorLocation(CurrentLocation, false, nullptr, ETeleportType::TeleportPhysics);
+		}
 	}
 	else
 	{
@@ -536,14 +746,14 @@ void AVRCharacter::CheckCameraFade(float DeltaTime)
 	{
 		bCameraInAMesh = false;
 	}
-
+	//Fade opacity interpolation
 	CurrentCameraFadeOpacity = FMath::FInterpTo(CurrentCameraFadeOpacity, targetOpacity, DeltaTime, 10.f);
 }
 
 void AVRCharacter::ApplyCameraFade()
 {
 	if (!CameraFadeComponent || !FadeDynamicMaterial) return;
-
+	//Apply new opacity to the camera fade mesh via dynamic material instance
 	if (CurrentCameraFadeOpacity > 0.01f)
 	{
 		CameraFadeComponent->SetHiddenInGame(false);
@@ -568,38 +778,59 @@ void AVRCharacter::DrawMsg(const FString& msg)
 void AVRCharacter::CalculateCurrentVelocity(float DeltaTime)
 {
 	if (!CameraComponent || FMath::IsNearlyZero(DeltaTime)) return;
-
+	//World Camera Location
 	FVector CurrentCameraPosition = CameraComponent->GetComponentLocation();
+	//use V = ds / dt, where dt -> 0 - Instant Velocity
 	CurrentVelocity = (CurrentCameraPosition - PrevCameraPosition) / DeltaTime;
 	PrevCameraPosition = CurrentCameraPosition;
 }
 
 void AVRCharacter::UpdateCapsuleComponentPosition()
 {
-	if (!CameraComponent || !CapsuleCollisionComponent || bVirtControllerLocked) return;
-
+	if (!CameraComponent || !CapsuleCollisionComponent) return;
+	//We take the position of the VR Camera relative to the Track Space origin
 	FVector CameraLoc = CameraComponent->GetRelativeLocation();
+	//Dont forget to shift down Capsule Component by -half height of the Capsule Component
 	float currentHalfHeight = CapsuleCollisionComponent->GetUnscaledCapsuleHalfHeight();
 	FVector TargetCapsuleLoc(CameraLoc.X, CameraLoc.Y, currentHalfHeight);
-	CapsuleCollisionComponent->SetRelativeLocation(TargetCapsuleLoc, true);
+	//Take to the account Mesh Offset, as Capsule is the Parent of the Mesh. And we have to shift it back in X axis so Camera will be in the eye location
+	CapsuleCollisionComponent->SetRelativeLocation(TargetCapsuleLoc + MeshOffset, false, nullptr, ETeleportType::TeleportPhysics);
 }
 
-void AVRCharacter::ApplyRotationFromCameraToMesh(float DeltaTime)
+void AVRCharacter::ApplyRotationFromCameraToCapsule(float DeltaTime)
 {
-	if (!CameraComponent || !SkeletalMeshComponent) return;
-
+	if (!CameraComponent || !CapsuleCollisionComponent) return;
+	//Get the yaw component of the rotaion (Along Z axis) in a tracking Space
 	float HeadYaw = CameraComponent->GetRelativeRotation().Yaw;
-	float TargetMeshYaw = HeadYaw - 90.0f;
-	FRotator CurrentRot = SkeletalMeshComponent->GetRelativeRotation();
-	FRotator TargetRot = FRotator(0.f, TargetMeshYaw, 0.f);	
+	//Get Current Rotation of the Skeletal Mesh, so we don't copy it, we accumulate
+	FRotator CurrentRot = CapsuleCollisionComponent->GetRelativeRotation();
+	//Build Yaw rotation Matrix
+	FRotator TargetRot = FRotator(0.f, HeadYaw, 0.f);
+	//Calculate new interpolated rotation
 	FRotator SmoothedRot = FMath::RInterpTo(CurrentRot, TargetRot, DeltaTime, 10.0f);
-	SkeletalMeshComponent->SetRelativeRotation(SmoothedRot);
+	//Apply rotation
+	CapsuleCollisionComponent->SetRelativeRotation(SmoothedRot);
+}
+
+bool AVRCharacter::IsCrouching(float* crouchDepth)
+{
+	if (!CameraComponent) return false;
+	//Get camera location relative to the Tracking Space, take Z coord
+	float currPlayerHeight = CameraComponent->GetRelativeLocation().Z;
+	//Deapth of the Crouch
+	float h = (InitialPlayerHeight - currPlayerHeight);
+	if (crouchDepth)
+	{
+		*crouchDepth = h;
+	}	
+	return h > CrouchThreshold;
 }
 
 #if WITH_EDITOR
 
 void AVRCharacter::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
+	//Get the properety name that was changed by the canging it's value in editor
 	FName propName = PropertyChangedEvent.GetPropertyName();
 	if (propName == NAME_None) return;
 	if (propName == GET_MEMBER_NAME_CHECKED(AVRCharacter, DeadZoneRadius) 
@@ -621,23 +852,48 @@ void AVRCharacter::PostEditChangeProperty(FPropertyChangedEvent& PropertyChanged
 
 #endif
 
+FString ConvertEnumToStr(EVRCharacterState state)
+{
+	switch (state)
+	{
+	case EVRCharacterState::VRCS_Blocked:
+		return FString("Block");
+		
+	case EVRCharacterState::VRCS_FreeRoam:
+		return FString("Free Roam");
+	case EVRCharacterState::VRCS_Battle:
+		return FString("Battle");
+	}
+	return FString();
+}
+
 void AVRCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
-	RecalibrateCapsuleAndMeshComponent();
-	UpdateCapsuleComponentPosition();
-	ApplyRotationFromCameraToMesh(DeltaTime);
-	CalculateCurrentVelocity(DeltaTime);
-	DetectGround();
-
 	/*if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(1, 5, FColor::Blue, FString::Printf(TEXT("On Ground: %s"), bIsGrounded ? TEXT("True") : TEXT("False")));
+		GEngine->AddOnScreenDebugMessage(1, 5.f, FColor::Red, FString::Printf(TEXT("Curr State: %s"), *ConvertEnumToStr(CurrentCharacterState)));
+		GEngine->AddOnScreenDebugMessage(2, 5.f, FColor::Blue, FString::Printf(TEXT("Cached State: %s"), *ConvertEnumToStr(CachedCharacterState)));
 	}*/
-
+	CalculatePlayerHeight();
+	//Controls Capsule Mesh Component Relations
+	RecalibrateCapsuleAndMeshComponent();
+	UpdateCapsuleComponentPosition();
+	ApplyRotationFromCameraToCapsule(DeltaTime);
+	//Physics Calculations
+	CalculateCurrentVelocity(DeltaTime);
+	DetectGround();
 	ApplyGravity(DeltaTime);
-	HandleMovement(DeltaTime);
+	//Camera Fade
 	CheckCameraFade(DeltaTime);
 	ApplyCameraFade();
+	//IK Calculations
+	UVRCharacterAnimInstance* inst = GetCharAnimInstance();
+	if (inst)
+	{
+		//We require additional sensors for Elbows or some Math 
+		inst->CalculateElbowJointTarget(DeltaTime, true);
+		inst->CalculateShoulderRotation(DeltaTime);
+	}
+	
 }

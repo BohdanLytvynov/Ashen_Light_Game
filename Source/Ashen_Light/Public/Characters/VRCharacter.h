@@ -1,19 +1,14 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Characters/CharacterBase.h"
+#include "../../Public/Enums.h"
 #include "VRCharacter.generated.h"
 /**
  * 
  */
-UENUM()
-enum class EVRCharacterState
-{
-	VRCS_FreeRoam UMETA(DisplayName = "Free Roam State"),
-	VRCS_Battle UMETA(DisplayName = "Battle State")
-};
 
 UCLASS()
 class ASHEN_LIGHT_API AVRCharacter : public APawn
@@ -81,8 +76,26 @@ protected:
 	UPROPERTY(Transient)
 	class UMaterialInstanceDynamic* FadeDynamicMaterial;
 
-	UPROPERTY(EditDefaultsOnly)
+	UPROPERTY(Transient)
+	UMaterialInstanceDynamic* VRSliderMaterialInstance;
+
+	UPROPERTY(Transient)
+	UMaterialInstanceDynamic* DeadZoneMaterialInstance;
+
+	UPROPERTY(Transient)
+	UMaterialInstanceDynamic* ActiveZoneMaterialInstance;
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR Locomotion Decals")
 	class UMaterialInterface* FadeMaterialBase;
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR Locomotion Decals")
+	UMaterialInterface* VRSliderMaterialBase;
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR Locomotion Decals")
+	UMaterialInterface* DeadZoneMaterialBase;
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR Locomotion Decals")
+	UMaterialInterface* ActiveZoneMaterialBase;
 
 #pragma endregion
 
@@ -105,6 +118,15 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Player Anchor Height", ClampMin = "0.001", UIMin = "0.001"))
 	float PlayerAnchorZoneHeight = 300.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR Locomotion Decals")
+	FLinearColor MovementLockedDecalColor = FColor::Red;
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR Locomotion Decals")
+	FLinearColor BattleModeDecalColor = FColor::Yellow;
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR locomotion Decals")
+	FLinearColor FreeRoamDecalColor = FColor::Green;
 		
 	UPROPERTY(EditAnywhere, Category = "VR Locomotion", meta = (DisplayName = "Swinging Threshold", ClampMin = "0.001", UIMin = "0.001"))
 	float SwiningThreshold = 40.f;
@@ -117,6 +139,9 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "VR Locomotion", meta = (DisplayName = "Ground Detection Threshold", Tooltip = "Value that will be added to the end point of the Sphere Trace for Ground Detection"))
 	float GroundDetectionThreshold = 10.f;
+
+	UPROPERTY(EditAnywhere, Category = "VR Locomotion")
+	float CrouchThreshold = 10.f;
 
 	UPROPERTY(EditAnywhere, Category = "VR Locomotion Gravity", meta = (DisplayName = "Gravity Constant g"))
 	float GravityConstant = -980.f; //cm / sec^2
@@ -138,9 +163,9 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "VR Camera Fade", meta = (DisplayName = "Camera Fade Distance", ClampMin = "0.001", UIMin = "0.001"))
 	float CameraFadeDistance = 5.f;
-
-	/*UPROPERTY(EditAnywhere, Category = "VR IK", meta = (Tooltip = "Name of the head bone in Skeletal Mesh."))
-	FString HeadBoneName = "head";*/
+	
+	UPROPERTY(EditAnywhere, Category = "VR Adjustments", meta = (Tooltip = "We need this parameter, cause Skeletal Mesh Origin is located not at the foot of the mesh. It is rised Up for some value so we need to raise our skeletal mesh up too."))
+	float MeshOriginAdjustment = 0.f;
 
 	UPROPERTY()
 	AActor* CurrentObstacle = nullptr;
@@ -148,7 +173,7 @@ protected:
 #pragma endregion
 
 #pragma region UFunctions
-	UFUNCTION()
+	UFUNCTION()	
 	void OnHMD_Recentered();
 
 	UFUNCTION(BlueprintCallable)
@@ -161,10 +186,20 @@ protected:
 
 #pragma region C++ Functions
 	/// <summary>
+	/// Lazly get the VRCharacterAnimInstance
+	/// </summary>
+	/// <returns></returns>
+	class UVRCharacterAnimInstance* GetCharAnimInstance();
+
+	/// <summary>
 	/// Set all Input actions binding here
 	/// </summary>
 	/// <param name="PlayerInputComponent">Component where we perform binding</param>
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
+#pragma region Input Actions Binding
+	///----LOCOMOTION----
+
 	/// <summary>
 	/// Called when we press B button on the right motion controller
 	/// </summary>
@@ -177,6 +212,53 @@ protected:
 	/// Called when we release Y button on the left motion controller
 	/// </summary>
 	void OnSprintReleased();
+
+	///----HAND GRABS----
+
+	/// <summary>
+	/// Called when we press Right Grab Button
+	/// </summary>
+	void OnRightGrabButtonPressed();
+	/// <summary>
+	/// Called when we release right grab button
+	/// </summary>
+	void OnRightGrabButtonReleased();
+	/// <summary>
+	/// Called when we press left grab button
+	/// </summary>
+	void OnLeftGrabButtonPressed();
+	/// <summary>
+	/// Called when we release left grab button
+	/// </summary>
+	void OnLeftGrabButtonReleased();
+
+	///----HAND TRIGGERS----
+
+	/// <summary>
+	/// Called when we press right hand trigger
+	/// </summary>
+	void OnRightTriggerButtonPressed();
+	/// <summary>
+	/// Called when we release right hand trigger
+	/// </summary>
+	void OnRightTriggerButtonReleased();
+	/// <summary>
+	/// Called when we press left hand trigger
+	/// </summary>
+	void OnLeftTriggerButtonPressed();
+	/// <summary>
+	/// Called when we release left hand trigger
+	/// </summary>
+	void OnLeftTriggerButtonReleased();
+
+	///----BATTLE MODE----
+	
+	/// <summary>
+	/// Called when we press A button
+	/// </summary>
+	void OnBlockMovementPressed();
+#pragma endregion
+	
 	/// <summary>
 	/// During playing the height of the player changes. And here we resize ze Physics collision capsule component, and we also ensure that 
 	/// capsule is moved to the floor. And also we need to move Skeletal mesh down for -Capsule Half Height
@@ -267,7 +349,7 @@ protected:
 	/// Rotates Skeletal mesh according to HMD orientation
 	/// </summary>
 	/// <param name="DeltaTime"></param>
-	void ApplyRotationFromCameraToMesh(float DeltaTime);
+	void ApplyRotationFromCameraToCapsule(float DeltaTime);
 #pragma endregion
 
 #pragma region Editor Callable functions
@@ -311,28 +393,55 @@ public:
 	{
 		return RightMotionController;
 	}
+	/// <summary>
+	/// Updates delta between camera and head bone of the Skeletal Mesh
+	/// </summary>
+	/// <param name="delta"></param>
+	FORCEINLINE void UpdateCameraHeadDelta(float delta)
+	{
+		cameraHeadDelta = delta;
+	}
+	/// <summary>
+	/// Do we do crouching. Calculated by comparing the difference between the player height and current camera Z position.
+	/// </summary>
+	/// <param name="crouchDepth">Calculated depth of the crouch. Can be used in IK Calculation</param>
+	/// <returns></returns>
+	bool IsCrouching(float* crouchDepth);
+#pragma region Public UPROPERTIES
+	UPROPERTY(EditAnywhere, Category = "VR Simulation", meta = (Tooltip="Player height that will be used in Simulation"))
+	float PlayerPreviewHeight = 186.f;
+
+	UPROPERTY(EditAnywhere, Category = "Adjustments Constants", meta = (DisplayName = "Mesh Offset", Tooltip = "Offset for camera. We cannot manualy edit camera location, cause it is controlled by HMD. But we can shift mesh back in X Axis. Also it is used to adjust IK Camera Position"))
+	FVector MeshOffset = FVector(-10.f, 0.f, 0.f);
+#pragma endregion
+
 
 private:
-	/*float leftHandSpeed;
-	float rightHandSpeed;*/
-
 	FVector prevLeftHandLocation;//Left Hand Location in Tracking Space calculated in the previous frame
 	FVector prevRightHandLocation;//Right Hand Location in Tracking Space calculated in the previous frame
-
 	bool bIsObstacleHit;//Do we hit some Static or Dynamic Mesh?
 	bool bIsGrounded;//Do we stay on a ground
 	FHitResult CurrentGroundHit;//Hit of the ground
 	FHitResult CurrentObstacleHit;//Hit of the obstacle
 	float VerticalVelocity = 0.f;//Velocity applied to the Pawn in -Z direction
-	bool bCanPerformBattleStep;//Do we in battle mode?
+	bool bCanPerformBattleStep;//Can we perform Battle Step?
 	bool bCanRun;//Is Run button pressed
 	bool bCameraInAMesh;//Has camera entered the mesh?
-
+	float cameraHeadDelta;//Delta between Camera Z coordinate and head bone Z coordinate. we use half of it to place Mesh correctly
 	EVRCharacterState CurrentCharacterState;
+	EVRCharacterState CachedCharacterState;
 	FVector CurrentVelocity;
 	FVector PrevCameraPosition;//Camera Location in the Tracking Space calculated in the previous frame
-
+	float InitialPlayerHeight;//Height of the player that was calculated during the first start of the game
 	float CurrentCameraFadeOpacity;
-
-	bool bVirtControllerLocked;//Do we lock Virtual Joystick and Capsule Collision Component
+	UVRCharacterAnimInstance* VRCharacterAnimInstance;
+	bool initialPlayerHeightCalculated;
+	UMaterialInstanceDynamic* CreateMaterialInstance(UMaterialInterface* interface);
+	void ApplyMaterialToComponent(UPrimitiveComponent* comp, int32 matindex,
+		UMaterialInterface* materialBase, UMaterialInstanceDynamic*& dynamicInstance);
+	void ApplyMaterialToComponent(UDecalComponent* comp,
+		UMaterialInterface* materialBase, UMaterialInstanceDynamic*& dynamicInstance);
+	void SetDecalColors();
+	void SetDecalsColor(FLinearColor color);
+	void CalculatePlayerHeight();
 };
