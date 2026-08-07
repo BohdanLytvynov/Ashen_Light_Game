@@ -114,8 +114,10 @@ void UVRCharacterAnimInstance::CalculateElbowJointTarget(float DeltaTime, bool d
 	CalculateElbowJointTarget(false, DeltaTime, debug);
 }
 
-void UVRCharacterAnimInstance::CalculateShoulderRotation(float DeltaTime)
+void UVRCharacterAnimInstance::CalculateSpineRotation(float DeltaTime, bool debug)
 {
+	CalculateSpineRotationAccordingToTheControllerLocation(true, DeltaTime, debug);
+	CalculateSpineRotationAccordingToTheControllerLocation(false, DeltaTime, debug);
 }
 
 float UVRCharacterAnimInstance::GetUniversalScaleFactorForPreview()
@@ -257,7 +259,73 @@ void UVRCharacterAnimInstance::CalculateElbowJointTarget(bool right, float delta
 			GEngine->AddOnScreenDebugMessage(2, 5, FColor::Red, FString::Printf(TEXT("Left Angle: %f"), leftAngle));
 		DrawDebugSphere(w, skelMeshTransform.TransformPosition(LeftElbowJointTargetLocation), 10.f, 8, FColor::Green);
 	}
-} 
+}
+
+void UVRCharacterAnimInstance::CalculateSpineRotationAccordingToTheControllerLocation(bool right, float deltaTime, bool debug)
+{
+	if (!SkeletalMesh) return;
+	FString shoulderSocket = right ? RightUpperArmSocketName : LeftUpperArmSocketName;
+	UMotionControllerComponent* controller = right ? RightController : LeftController;
+	if (!controller) return;
+	FVector shoulderPos = SkeletalMesh->GetSocketLocation(FName(shoulderSocket));
+	//Calculate arm Vector
+	FVector armVector = controller->GetComponentLocation() - shoulderPos;
+	//Calculate current distance from shoulder to controller (dist squared)
+	float distFromShoulderToController = armVector.Size();
+	//Length of the arm
+	float handLengthCached = handLength + lowerArmLength;
+	float delta = distFromShoulderToController - handLengthCached;
+	//Get Forwar Vector of the Skeletal Mesh Component
+	FVector skelMeshForward = SkeletalMesh->GetRightVector();
+	//Normalized armVector
+	FVector armAxis = armVector.GetSafeNormal();
+	float prjAxis = FVector::DotProduct(skelMeshForward, armAxis);
+	float angle = 0.f;
+
+	if (delta > 0.f && prjAxis > 0.f)
+	{
+		//Calculate Spine Rotation
+		//Calculate angle for rotation
+		FVector spine_03Location = SkeletalMesh->GetSocketLocation(FName(Spine03SocketName));
+		float r = (shoulderPos - spine_03Location).Size();
+		//sin(a) = delta / r, asin(sin(a)) = asin(delta / r) => a = asin(delta / r), asin(x) x in [-1 ; 1]
+		angle = FMath::RadiansToDegrees(FMath::Asin(FMath::Clamp(delta / r, -1.f, 1.f)));
+	}
+	//Cache angle for right and left hand
+	if (right)
+	{
+		angle *= -1.f;
+		rightSpineTargetAngle = angle;
+	}
+	else
+	{
+		leftSpineTargetAngle = angle;
+	}
+
+	float targetRotAngle = rightSpineTargetAngle + leftSpineTargetAngle;
+
+	//Calculate the propriate rotations of spine03, spine02, spine01
+	Spine03Rot = FMath::FInterpTo(Spine03Rot, targetRotAngle * Spine03BoneWeight, deltaTime, SpineIKInterpolationConstant);
+	Spine02Rot = FMath::FInterpTo(Spine02Rot, targetRotAngle * Spine02BoneWeight, deltaTime, SpineIKInterpolationConstant);
+	Spine01Rot = FMath::FInterpTo(Spine01Rot, targetRotAngle * Spine01BoneWeight, deltaTime, SpineIKInterpolationConstant);
+	
+	if (!debug) return;
+	UWorld* w = GetWorld();
+	DrawDebugDirectionalArrow(w, controller->GetComponentLocation(),
+		controller->GetComponentLocation() + armAxis * 20.f, 10.f, FColor::Orange);
+	DrawDebugDirectionalArrow(w, controller->GetComponentLocation(),
+		controller->GetComponentLocation() + skelMeshForward * 20.f, 10.f, FColor::Red);
+	if (right)
+	{
+		if (GEngine)
+			GEngine->AddOnScreenDebugMessage(4, 0.f, FColor::Red, FString::Printf(TEXT("Right Spine angle: %f"), angle));
+	}
+	else
+	{
+		if (GEngine)
+			GEngine->AddOnScreenDebugMessage(5, 0.f, FColor::Red, FString::Printf(TEXT("Left Spine angle: %f"), angle));
+	}
+}
 
 void UVRCharacterAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 {

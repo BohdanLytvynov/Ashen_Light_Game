@@ -892,8 +892,8 @@ void AVRCharacter::Tick(float DeltaTime)
 	if (inst)
 	{
 		//We require additional sensors for Elbows or some Math 
-		inst->CalculateElbowJointTarget(DeltaTime, true);
-		inst->CalculateShoulderRotation(DeltaTime);
+		inst->CalculateElbowJointTarget(DeltaTime, false);
+		inst->CalculateSpineRotation(DeltaTime, false);
 	}
 	
 }

@@ -83,8 +83,12 @@ public:
 	/// </summary>
 	/// <param name="DeltaTime"></param>
 	void CalculateElbowJointTarget(float DeltaTime, bool debug = false);
-
-	void CalculateShoulderRotation(float DeltaTime);
+	/// <summary>
+	/// Calculate the proper rotation of the spine bones. Will be called in the Tick of the pawn
+	/// </summary>
+	/// <param name="DeltaTime"></param>
+	/// <param name="debug"></param>
+	void CalculateSpineRotation(float DeltaTime, bool debug = false);
 protected:
 	class AVRCharacter* Self;
 	class UCameraComponent* CameraComponent;
@@ -130,9 +134,6 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK")
 	float ElbowJointTargetInterpolationConstant = 3.f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK")
-	float ShoulderRotationAngle = 35.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK | Right")
 	FString RightIndexSocketName = FString("index_01_r_s");
@@ -197,7 +198,20 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "VR LEG IK")
 	float HeadIKInterpolationConstant = 5.f;
 
-	/*UPROPERTY(EditDefaultsOnly, Category = "VR SPINE IK")*/
+	UPROPERTY(EditDefaultsOnly, Category = "VR SPINE IK")
+	FString Spine03SocketName = FString("spine_03_s");
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR SPINE IK")
+	float Spine01BoneWeight = 0.15f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR SPINE IK")
+	float Spine02BoneWeight = 0.35f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR SPINE IK")
+	float Spine03BoneWeight = 0.50f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR SPINE IK")
+	float SpineIKInterpolationConstant = 3.f;
 
 	UPROPERTY(BlueprintReadOnly)
 	float RightMotionControllerAnimState = 0.f;//0 - open hand 0.5 - open grip 1 = closed grip
@@ -213,6 +227,15 @@ protected:
 
 	UPROPERTY(BlueprintReadOnly)
 	FVector RightElbowJointTargetLocation;
+
+	UPROPERTY(BlueprintReadOnly)
+	float Spine03Rot;
+
+	UPROPERTY(BlueprintReadOnly)
+	float Spine02Rot;
+
+	UPROPERTY(BlueprintReadOnly)
+	float Spine01Rot;
 private:
 	/// <summary>
 	/// Calculate Transform for Head Bone
@@ -286,12 +309,21 @@ private:
 	/// <param name="rigth">True for right</param>
 	/// <param name="deltaTime"></param>
 	void CalculateElbowJointTarget(bool rigth, float deltaTime, bool debug = false);
+	/// <summary>
+	/// Calculates Spine Rotation of spine_01, spine_02, spine_03 according to weights
+	/// </summary>
+	/// <param name="right"></param>
+	/// <param name="deltaTime"></param>
+	/// <param name="debug"></param>
+	void CalculateSpineRotationAccordingToTheControllerLocation(bool right, float deltaTime, bool debug = false);
 #pragma region State
 	bool m_Initialized;//Do we perform initialization of the blueprint
 	/// IK Distances
 	float handLength;//Length of the hand with scale factor
 	float lowerArmLength;//Length of the lowerArm with scale factor
 	float elbowJointTargetDistance;//Scalar distance from elbow to the Joint Target
+	float leftSpineTargetAngle = 0.f;
+	float rightSpineTargetAngle = 0.f;
 #pragma endregion
 
 };
