@@ -12,6 +12,7 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "Misc/CoreDelegates.h"
 #include "../../Public/Animations/VRCharacterAnimInstance.h"
+#include "../../Public/Enums.h"
 #include "IXRTrackingSystem.h"
 
 
@@ -327,7 +328,7 @@ void AVRCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	PlayerInputComponent->BindAction(FName("TriggerRight"), IE_Pressed, this, &AVRCharacter::OnRightTriggerButtonPressed);
 	PlayerInputComponent->BindAction(FName("TriggerRight"), IE_Released, this, &AVRCharacter::OnRightTriggerButtonReleased);
 	PlayerInputComponent->BindAction(FName("TriggerLeft"), IE_Pressed, this, &AVRCharacter::OnLeftTriggerButtonPressed);
-	PlayerInputComponent->BindAction(FName("TriggerLeft"), IE_Released, this, &AVRCharacter::OnLeftTriggerButtonPressed);
+	PlayerInputComponent->BindAction(FName("TriggerLeft"), IE_Released, this, &AVRCharacter::OnLeftTriggerButtonReleased);
 
 	PlayerInputComponent->BindAction(FName("BlockMovement"), IE_Released, this, &AVRCharacter::OnBlockMovementPressed);
 }
@@ -362,56 +363,56 @@ void AVRCharacter::OnRightGrabButtonPressed()
 {
 	UVRCharacterAnimInstance* inst = GetCharAnimInstance();
 	if (!inst) return;
-	inst->DoGrab(true);
+	inst->SetGripState(true, true);
 }
 
 void AVRCharacter::OnRightGrabButtonReleased()
 {
 	UVRCharacterAnimInstance* inst = GetCharAnimInstance();
 	if (!inst) return;
-	inst->ReleaseGrab(true);
+	inst->SetGripState(true, false);
 }
 
 void AVRCharacter::OnLeftGrabButtonPressed()
 {
 	UVRCharacterAnimInstance* inst = GetCharAnimInstance();
 	if (!inst) return;
-	inst->DoGrab(false);
+	inst->SetGripState(false, true);
 }
 
 void AVRCharacter::OnLeftGrabButtonReleased()
 {
 	UVRCharacterAnimInstance* inst = GetCharAnimInstance();
 	if (!inst) return;
-	inst->ReleaseGrab(false);
+	inst->SetGripState(false, false);
 }
 
 void AVRCharacter::OnRightTriggerButtonPressed()
 {
 	UVRCharacterAnimInstance* inst = GetCharAnimInstance();
 	if (!inst) return;
-	inst->PressTrigger(true);
+	inst->SetTriggerState(true, true);
 }
 
 void AVRCharacter::OnRightTriggerButtonReleased()
 {
 	UVRCharacterAnimInstance* inst = GetCharAnimInstance();
 	if (!inst) return;
-	inst->ReleaseTrigger(true);
+	inst->SetTriggerState(true, false);
 }
 
 void AVRCharacter::OnLeftTriggerButtonPressed()
 {
 	UVRCharacterAnimInstance* inst = GetCharAnimInstance();
 	if (!inst) return;
-	inst->PressTrigger(false);
+	inst->SetTriggerState(false, true);
 }
 
 void AVRCharacter::OnLeftTriggerButtonReleased()
 {
 	UVRCharacterAnimInstance* inst = GetCharAnimInstance();
 	if (!inst) return;
-	inst->ReleaseTrigger(false);
+	inst->SetTriggerState(false, false);
 }
 
 void AVRCharacter::OnBlockMovementPressed()

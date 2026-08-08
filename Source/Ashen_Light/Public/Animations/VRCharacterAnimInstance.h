@@ -25,52 +25,59 @@ public:
 	/// Occurs when smth changes in Animation Blueprint Editor. Also called when Bone's Transforms were calculated
 	/// </summary>
 	virtual void NativePostEvaluateAnimation() override;
-
-	FORCEINLINE void DoGrab(bool right)
+	/// <summary>
+	/// Set new Grip State
+	/// </summary>
+	/// <param name="right">true - right controller, false - left</param>
+	/// <param name="pressed">true - pressed, false - released</param>
+	FORCEINLINE void SetGripState(bool right, bool pressed)
 	{
-		if (right)
-		{
-			RightMotionControllerAnimState = FMath::Clamp(RightMotionControllerAnimState + HandAnimPoseStep, 0.f, 1.f);
-		}
-		else
-		{
-			LeftMotionControllerAnimState = FMath::Clamp(LeftMotionControllerAnimState + HandAnimPoseStep, 0.f, 1.f);
-		}
+		if (right) bIsRightGripPressed = pressed;
+		else bIsLeftGripPressed = pressed;
+
+		UpdateControllerStates();
 	}
-
-	FORCEINLINE void ReleaseGrab(bool right)
+	/// <summary>
+	/// Set new Trigger State
+	/// </summary>
+	/// <param name="right">true - right controller, false - left</param>
+	/// <param name="pressed">true - pressed, false - released</param>
+	FORCEINLINE void SetTriggerState(bool right, bool pressed)
 	{
-		if (right)
-		{
-			RightMotionControllerAnimState = FMath::Clamp(RightMotionControllerAnimState - HandAnimPoseStep, 0.f, 1.f);
-		}
-		else
-		{
-			LeftMotionControllerAnimState = FMath::Clamp(LeftMotionControllerAnimState - HandAnimPoseStep, 0.f, 1.f);
-		}
+		if (right) bIsRightTriggerPressed = pressed;
+		else bIsLeftTriggerPressed = pressed;
+
+		UpdateControllerStates();
 	}
-
-	FORCEINLINE void PressTrigger(bool right)
+	/// <summary>
+	/// Choose propriate Controller State for propriate Motion Controller
+	/// </summary>
+	FORCEINLINE void UpdateControllerStates()
 	{
-		if (right)
+		if (bIsRightTriggerPressed)
 		{
-			RightMotionControllerAnimState = FMath::Clamp(RightMotionControllerAnimState + HandAnimPoseStep, 0.f, 1.f);
+			RightMotionControllerAnimState = EVRControllerState::VRCS_Triggering;
+		}
+		else if (bIsRightGripPressed)
+		{
+			RightMotionControllerAnimState = EVRControllerState::VRCS_Grabbing;
 		}
 		else
 		{
-			LeftMotionControllerAnimState = FMath::Clamp(LeftMotionControllerAnimState + HandAnimPoseStep, 0.f, 1.f);
+			RightMotionControllerAnimState = EVRControllerState::VRCS_Neutral;
 		}
-	}
 
-	FORCEINLINE void ReleaseTrigger(bool right)
-	{
-		if (right)
+		if (bIsLeftTriggerPressed)
 		{
-			RightMotionControllerAnimState = FMath::Clamp(RightMotionControllerAnimState - HandAnimPoseStep, 0.f, 1.f);
+			LeftMotionControllerAnimState = EVRControllerState::VRCS_Triggering;
+		}
+		else if (bIsLeftGripPressed)
+		{
+			LeftMotionControllerAnimState = EVRControllerState::VRCS_Grabbing;
 		}
 		else
 		{
-			LeftMotionControllerAnimState = FMath::Clamp(LeftMotionControllerAnimState - HandAnimPoseStep, 0.f, 1.f);
+			LeftMotionControllerAnimState = EVRControllerState::VRCS_Neutral;
 		}
 	}
 	/// <summary>
@@ -128,9 +135,6 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR IK Preview")
 	FVector NeckOffset = FVector(-10.0f, 0.0f, -8.0f);
-
-	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK")
-	float HandAnimPoseStep = 0.5f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK")
 	float ElbowJointTargetInterpolationConstant = 3.f;
@@ -214,10 +218,10 @@ protected:
 	float SpineIKInterpolationConstant = 3.f;
 
 	UPROPERTY(BlueprintReadOnly)
-	float RightMotionControllerAnimState = 0.f;//0 - open hand 0.5 - open grip 1 = closed grip
+	EVRControllerState RightMotionControllerAnimState = EVRControllerState::VRCS_Neutral;
 
 	UPROPERTY(BlueprintReadOnly)
-	float LeftMotionControllerAnimState = 0.f;//0 - open hand 0.5 - open grip 1 = closed grip
+	EVRControllerState LeftMotionControllerAnimState = EVRControllerState::VRCS_Neutral;
 
 	UPROPERTY(BlueprintReadOnly)
 	float UniversalScaleFactor = 1.f;
@@ -324,6 +328,10 @@ private:
 	float elbowJointTargetDistance;//Scalar distance from elbow to the Joint Target
 	float leftSpineTargetAngle = 0.f;
 	float rightSpineTargetAngle = 0.f;
+	bool bIsRightGripPressed = false;
+	bool bIsRightTriggerPressed = false;
+	bool bIsLeftGripPressed = false;
+	bool bIsLeftTriggerPressed = false;
 #pragma endregion
 
 };

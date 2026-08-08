@@ -415,7 +415,6 @@ public:
 	FVector MeshOffset = FVector(-10.f, 0.f, 0.f);
 #pragma endregion
 
-
 private:
 	FVector prevLeftHandLocation;//Left Hand Location in Tracking Space calculated in the previous frame
 	FVector prevRightHandLocation;//Right Hand Location in Tracking Space calculated in the previous frame
