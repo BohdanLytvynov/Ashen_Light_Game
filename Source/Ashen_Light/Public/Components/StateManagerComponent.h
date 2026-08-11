@@ -3,24 +3,37 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Components/ActorComponent.h"
 #include "StateManagerComponent.generated.h"
 
 
-UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
-class ASHEN_LIGHT_API UStateManagerComponent : public UActorComponent
+UCLASS(BlueprintType, Blueprintable)
+class ASHEN_LIGHT_API UStateManagerComponent : public UObject
 {
 	GENERATED_BODY()
 
 public:	
 	// Sets default values for this component's properties
 	UStateManagerComponent(const FObjectInitializer& init);
-
-protected:
-	// Called when the game starts
-	virtual void BeginPlay() override;
-
-public:	
 	// Called every frame
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	
+	/// <summary>
+	/// Register the new state to the Map
+	/// </summary>
+	/// <param name="state">State to register</param>
+	void RegisterState(class UStateComponentBase* state);
+	/// <summary>
+	/// Switch to the new state
+	/// </summary>
+	/// <param name="state">Enum of the state to switch to</param>
+	void SwitchState(uint8 state);
+	/// <summary>
+	/// Called every tick. Processes the main state logic
+	/// </summary>
+	/// <param name="DeltaTime"></param>
+	void OnTick(float DeltaTime);
+
+	uint8 GetCurrentStateEnum();
+private:
+	TMap<uint8, UStateComponentBase*> m_EnumStateMap;
+	UStateComponentBase* CurrentState;
 };
