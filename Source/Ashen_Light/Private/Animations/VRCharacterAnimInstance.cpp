@@ -30,6 +30,7 @@ void UVRCharacterAnimInstance::Initialize()
 		CameraComponent = Self->GetVRCamera();
 		RightController = Self->GetRightMotionController();
 		LeftController = Self->GetLeftMotionController();
+		SkeletalMesh->HideBoneByName(FName(HeadName), EPhysBodyOp::PBO_None);
 		m_Initialized = true;
 		return;
 	}
@@ -45,7 +46,7 @@ void UVRCharacterAnimInstance::GetCameraIKPositionForPreview()
 {	
 	FTransform headTransform = GetBoneTransform(FName(HeadName));
 	CameraIKTransform.SetRotation(headTransform.GetRotation());
-	CameraIKTransform.SetLocation(headTransform.GetLocation() + PreviewVRCameraLocation + NeckOffset);
+	CameraIKTransform.SetLocation(headTransform.GetLocation() + PreviewVRCameraLocation);
 	CameraIKTransform.SetScale3D(FVector::OneVector);
 }
 
@@ -102,7 +103,8 @@ void UVRCharacterAnimInstance::CalculateUniversalScaleFactor(float cameraLocatio
 	float BaseHeadZ = RefHeadTransform.GetLocation().Z;
 	if (FMath::IsNearlyZero(BaseHeadZ)) return;
 	//Send delta (|headBone - CameraPosition|) to Pawn to adjust mesh in Z coord
-	Self->UpdateCameraHeadDelta(FMath::Abs(cameraLocation - BaseHeadZ));
+	CameraHeadDelta = FMath::Abs(cameraLocation - BaseHeadZ);
+	Self->UpdateCameraHeadDelta(CameraHeadDelta);
 	UniversalScaleFactor = cameraLocation / BaseHeadZ;//Scale factor
 	//As we change scale factor we need to recalculate distances for IK
 	CalculateIKDistances();
@@ -140,14 +142,15 @@ void UVRCharacterAnimInstance::CalculateCrouching(float DeltaTime)
 	float depth = 0.f;
 	bool crouching = Self->IsCrouching(&depth);
 	float newCrouching = crouching == true ? 1.f : 0.f;
-	IsCrouching = FMath::FInterpTo(IsCrouching, newCrouching, DeltaTime, CrouchInterpolationConstant);
-	CrouchDepth = depth;
+
 	if (crouching)
 	{
+		CrouchDepth = depth;
 		UseHeadIK = FMath::FInterpTo(UseHeadIK, 0.f, DeltaTime, HeadIKInterpolationConstant);
 	}
 	else
 	{
+		CrouchDepth = CameraHeadDelta;
 		UseHeadIK = FMath::FInterpTo(UseHeadIK, 1.f, DeltaTime, HeadIKInterpolationConstant);
 	}
 }
@@ -366,7 +369,7 @@ void UVRCharacterAnimInstance::GetCameraIKTransform()
 	const FTransform MeshTransform = SkeletalMesh->GetComponentTransform();
 	const FTransform HMDTransform = CameraComponent->GetComponentTransform();
 	FTransform RelativeHMD = HMDTransform.GetRelativeTransform(MeshTransform);
-	FVector NeckLocation = RelativeHMD.GetLocation() + NeckOffset;
+	FVector NeckLocation = RelativeHMD.GetLocation();
 	CameraIKTransform.SetLocation(NeckLocation);
 	CameraIKTransform.SetRotation(FQuat::Identity);
 	CameraIKTransform.SetScale3D(FVector::OneVector);
@@ -406,5 +409,15 @@ void UVRCharacterAnimInstance::CalculateMotionControllerTransform(
 	//Rotation will be used in Modify Bone Mode to rotate the wrist
 	motionControllerTransform.SetRotation(NewRotation);
 	motionControllerTransform.SetScale3D(FVector::OneVector);
+}
+
+bool UVRCharacterAnimInstance::IsGrounded() const
+{
+	if (Self)
+	{
+		return Self->IsGrounded();
+	}
+
+	return false;
 }
 

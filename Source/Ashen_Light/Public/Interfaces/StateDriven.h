@@ -22,4 +22,6 @@ class ASHEN_LIGHT_API IStateDriven
 
 	// Add interface functions to this class. This is the class that will be inherited to implement this interface.
 public:
+	//Gets Actor World Transform
+	virtual FTransform GetActorTransform() = 0;
 };

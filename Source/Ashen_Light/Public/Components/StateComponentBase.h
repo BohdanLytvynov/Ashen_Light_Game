@@ -22,13 +22,12 @@ public:
 	virtual void OnStateExit() {}
 	virtual void OnStateTick(float DeltaTime) {}
 
-protected:
 	FORCEINLINE uint8 GetStateEnum() const
 	{
 		return m_StateEnum;
 	}
 
-	FORCEINLINE IStateDriven* GetContext() 
+	virtual IStateDriven* GetContext()
 	{
 		return m_Context;
 	}

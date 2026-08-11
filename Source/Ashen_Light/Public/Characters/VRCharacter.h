@@ -5,13 +5,14 @@
 #include "CoreMinimal.h"
 #include "Characters/CharacterBase.h"
 #include "../../Public/Enums.h"
+#include "../../Public/Interfaces/VRCharacterInterface.h"
 #include "VRCharacter.generated.h"
 /**
  * 
  */
 
 UCLASS()
-class ASHEN_LIGHT_API AVRCharacter : public APawn
+class ASHEN_LIGHT_API AVRCharacter : public APawn, public IVRCharacterInterface
 {
 	GENERATED_BODY()
 	/// <summary>
@@ -75,59 +76,23 @@ protected:
 
 	UPROPERTY(Transient)
 	class UMaterialInstanceDynamic* FadeDynamicMaterial;
-
-	UPROPERTY(Transient)
-	UMaterialInstanceDynamic* VRSliderMaterialInstance;
-
-	UPROPERTY(Transient)
-	UMaterialInstanceDynamic* DeadZoneMaterialInstance;
-
-	UPROPERTY(Transient)
-	UMaterialInstanceDynamic* ActiveZoneMaterialInstance;
-
-	UPROPERTY(EditDefaultsOnly, Category = "VR Locomotion Decals")
+	
+	UPROPERTY(EditDefaultsOnly, Category = "VR Camera Fade Material")
 	class UMaterialInterface* FadeMaterialBase;
 
-	UPROPERTY(EditDefaultsOnly, Category = "VR Locomotion Decals")
-	UMaterialInterface* VRSliderMaterialBase;
+	UPROPERTY(VisibleAnywhere)
+	class UPhysicalMovementComponent* PhysicalMovementComponent;
 
-	UPROPERTY(EditDefaultsOnly, Category = "VR Locomotion Decals")
-	UMaterialInterface* DeadZoneMaterialBase;
+	UPROPERTY(VisibleAnywhere)
+	class UTrackingSpaceMovementComponent* TrackingSpaceMovementComponent;
 
-	UPROPERTY(EditDefaultsOnly, Category = "VR Locomotion Decals")
-	UMaterialInterface* ActiveZoneMaterialBase;
+	UPROPERTY(VisibleAnywhere)
+	class UStateManagerComponent* LocomotionStateManager;
 
 #pragma endregion
 
 #pragma region UPROPERTIES
 
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Dead Zone Radius", ClampMin = "0.001", UIMin = "0.001"))
-	float DeadZoneRadius = 40.f;
-
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Dead Zone Height", ClampMin = "0.001", UIMin = "0.001"))
-	float DeadZoneHeight = 300.f;
-	
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Active Zone Radius", ClampMin = "0.001", UIMin = "0.001"))
-	float ActiveZoneRadius = 120.f;
-
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Active Zone Height", ClampMin = "0.001", UIMin = "0.001"))
-	float ActiveZoneHeight = 300.f;
-	
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Player Anchor Radius", ClampMin = "0.001", UIMin = "0.001"))
-	float PlayerAnchorZoneRadius = 60.f;
-
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Player Anchor Height", ClampMin = "0.001", UIMin = "0.001"))
-	float PlayerAnchorZoneHeight = 300.f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "VR Locomotion Decals")
-	FLinearColor MovementLockedDecalColor = FColor::Red;
-
-	UPROPERTY(EditDefaultsOnly, Category = "VR Locomotion Decals")
-	FLinearColor BattleModeDecalColor = FColor::Yellow;
-
-	UPROPERTY(EditDefaultsOnly, Category = "VR locomotion Decals")
-	FLinearColor FreeRoamDecalColor = FColor::Green;
-		
 	UPROPERTY(EditAnywhere, Category = "VR Locomotion", meta = (DisplayName = "Swinging Threshold", ClampMin = "0.001", UIMin = "0.001"))
 	float SwiningThreshold = 40.f;
 
@@ -151,21 +116,12 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "VR Locomotion Gravity", meta = (DisplayName = "Terminal Velocity"))
 	float TerminalVelocity = -4000.f; //cm / sec
-
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion Obstacle Detection", meta = (DisplayName = "Obstacle Distance Detection", ClampMin = "0.001", UIMin = "0.001"))
-	float ObstacleDistanceDetection = 140.f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VR Locomotion Obstacle Detection", meta = (ClampMin = "0.0", ClampMax = "90.0"))
-	float StopMovementAngleThreshold = 20.0f;
-
+	
 	UPROPERTY(EditAnywhere, Category = "VR Camera Fade", meta = (DisplayName = "Fade Chech Radius", ClampMin = "0.001", UIMin = "0.001"))
 	float FadeCheckRadius = 14.f;
 
 	UPROPERTY(EditAnywhere, Category = "VR Camera Fade", meta = (DisplayName = "Camera Fade Distance", ClampMin = "0.001", UIMin = "0.001"))
 	float CameraFadeDistance = 5.f;
-	
-	UPROPERTY(EditAnywhere, Category = "VR Adjustments", meta = (Tooltip = "We need this parameter, cause Skeletal Mesh Origin is located not at the foot of the mesh. It is rised Up for some value so we need to raise our skeletal mesh up too."))
-	float MeshOriginAdjustment = 0.f;
 
 	UPROPERTY()
 	AActor* CurrentObstacle = nullptr;
@@ -201,17 +157,13 @@ protected:
 	///----LOCOMOTION----
 
 	/// <summary>
-	/// Called when we press B button on the right motion controller
-	/// </summary>
-	void OnToggleBattleModePressed();
-	/// <summary>
 	/// Called when we press Y button on the left motion controller
 	/// </summary>
-	void OnSprintPressed();
+	void OnToggleMovementPressed();
 	/// <summary>
 	/// Called when we release Y button on the left motion controller
 	/// </summary>
-	void OnSprintReleased();
+	void OnToggleMovementReleased();
 
 	///----HAND GRABS----
 
@@ -251,12 +203,7 @@ protected:
 	/// </summary>
 	void OnLeftTriggerButtonReleased();
 
-	///----BATTLE MODE----
-	
-	/// <summary>
-	/// Called when we press A button
-	/// </summary>
-	void OnBlockMovementPressed();
+	///----BATTLE MODE----	
 #pragma endregion
 	
 	/// <summary>
@@ -271,18 +218,7 @@ protected:
 	/// <param name="thicknes">the length of the X Axis of the decal</param>
 	/// <param name="r">Decal radius</param>
 	/// <param name="redraw">Redraw decal in force mode?</param>
-	void ConfigureDecal(UDecalComponent* decal, float thicknes, float r, bool redraw = false);
-	/// <summary>
-	/// Main function for movement control by Virtual Joystick
-	/// </summary>
-	/// <param name="DeltaTime">Time passed between two adjacent frames</param>
-	virtual void HandleMovement(float DeltaTime);
-	/// <summary>
-	/// Calculates the Velocity of the right and left motion controllers, then compares them with a threshold
-	/// </summary>
-	/// <param name="DeltaTime">Time passed between two adjacent frames</param>
-	/// <returns>True - running, fals - walking</returns>
-	bool IsSwiningArms(float DeltaTime);
+	void ConfigureDecalSize(UDecalComponent* decal, float thicknes, float r, bool redraw = false);
 	/// <summary>
 	/// Calculates speed of motion controller
 	/// </summary>
@@ -290,19 +226,7 @@ protected:
 	/// <param name="prevMotionControllerPosition">Pointer to the previous motion controller position</param>
 	/// <param name="DeltaTime">Time passed between two adjacent frames</param>
 	/// <returns>Instant velocity of the controller</returns>
-	float GetMotionControllerSpeed(UMotionControllerComponent* motionController, FVector* prevMotionControllerPosition, float DeltaTime);
-	/// <summary>
-	/// Stops all the movement immediatly
-	/// </summary>
-	virtual void Stop();
-	/// <summary>
-	/// Sets the Walk speed to UPawnFloatingMovement
-	/// </summary>
-	virtual void Walk();
-	/// <summary>
-	/// Sets the Run speed to UPawnFloatingMovement
-	/// </summary>
-	virtual void Run();
+	float GetMotionControllerSpeed(UMotionControllerComponent* motionController, FVector* prevMotionControllerPosition, float DeltaTime) const;
 	/// <summary>
 	/// Traces sphere from the half of the capsule to the ground. The length of the trace is half of the capsule + threshold.
 	/// </summary>
@@ -318,10 +242,6 @@ protected:
 	/// <param name="InputVector"></param>
 	/// <returns></returns>
 	FVector AdjustInputForSlope(FVector InputVector) const;
-	/// <summary>
-	/// Traces sphere in Current Velocity direction to detect Obstacles.
-	/// </summary>
-	void CheckObstacles();
 	/// <summary>
 	/// Checks condition when we need to apply camera fade effect
 	/// </summary>
@@ -373,26 +293,7 @@ public:
 	/// </summary>
 	/// <returns>[0 ; 1] Ground Velocity Ratio</returns>
 	float GetGroundVelocityRatio() const;
-
-	FORCEINLINE UCameraComponent* GetVRCamera() const
-	{
-		return CameraComponent;
-	}
-
-	FORCEINLINE USkeletalMeshComponent* GetMesh() const
-	{
-		return SkeletalMeshComponent;
-	}
-
-	FORCEINLINE UMotionControllerComponent* GetLeftMotionController() const
-	{
-		return LeftMotionController;
-	}
-
-	FORCEINLINE UMotionControllerComponent* GetRightMotionController() const
-	{
-		return RightMotionController;
-	}
+	
 	/// <summary>
 	/// Updates delta between camera and head bone of the Skeletal Mesh
 	/// </summary>
@@ -401,18 +302,109 @@ public:
 	{
 		cameraHeadDelta = delta;
 	}
+
+	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Dead Zone Radius", ClampMin = "0.001", UIMin = "0.001"))
+	float DeadZoneRadius = 40.f;
+
+	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Dead Zone Height", ClampMin = "0.001", UIMin = "0.001"))
+	float DeadZoneHeight = 300.f;
+
+	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Active Zone Radius", ClampMin = "0.001", UIMin = "0.001"))
+	float ActiveZoneRadius = 120.f;
+
+	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Active Zone Height", ClampMin = "0.001", UIMin = "0.001"))
+	float ActiveZoneHeight = 300.f;
+
+	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Player Anchor Radius", ClampMin = "0.001", UIMin = "0.001"))
+	float PlayerAnchorZoneRadius = 60.f;
+
+	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Player Anchor Height", ClampMin = "0.001", UIMin = "0.001"))
+	float PlayerAnchorZoneHeight = 300.f;
+
+#pragma region IStateDriven
+	virtual void Move(const FVector& dir, float value) override;
+
+	/// <summary>
+	/// Stops all the movement immediatly
+	/// </summary>
+	virtual void StopMovement() override;
+	/// <summary>
+	/// Sets the Walk speed to UPawnFloatingMovement
+	/// </summary>
+	virtual void Walk() override;
+	/// <summary>
+	/// Sets the Run speed to UPawnFloatingMovement
+	/// </summary>
+	virtual void Run() override;
+
+	virtual UCapsuleComponent* GetCapsuleComponent() const override
+	{
+		return CapsuleCollisionComponent;
+	}
+
+	virtual FVector GetCurrentVelocity() const override
+	{
+		return CurrentVelocity;
+	}
+
+	virtual UCameraComponent* GetVRCamera() const override
+	{
+		return CameraComponent;
+	}
+
+	virtual USkeletalMeshComponent* GetMesh() const override
+	{
+		return SkeletalMeshComponent;
+	}
+
+	virtual UMotionControllerComponent* GetLeftMotionController() const override
+	{
+		return LeftMotionController;
+	}
+
+	virtual UMotionControllerComponent* GetRightMotionController() const override
+	{
+		return RightMotionController;
+	}
+
 	/// <summary>
 	/// Do we do crouching. Calculated by comparing the difference between the player height and current camera Z position.
 	/// </summary>
 	/// <param name="crouchDepth">Calculated depth of the crouch. Can be used in IK Calculation</param>
 	/// <returns></returns>
-	bool IsCrouching(float* crouchDepth);
+	virtual bool IsCrouching(float* crouchDepth) const override;
+
+	virtual float GetDeadZoneRadius() const
+	{
+		return DeadZoneRadius;
+	}
+	/// <summary>
+	/// Calculates the Velocity of the right and left motion controllers, then compares them with a threshold
+	/// </summary>
+	/// <param name="DeltaTime">Time passed between two adjacent frames</param>
+	/// <returns>True - running, fals - walking</returns>
+	virtual bool IsSwiningArms(float DeltaTime) override;
+
+	virtual bool CheckObstacles(float obstacleDistDetection, float halfHeightMultipl, FHitResult& OutHit);
+
+	virtual FVector AdjustInputForSlope(const FVector& worldDir) const override;
+
+	virtual bool CheckObstaclesInDirection(const FVector& NormDirection, float obstacleDistDetection, float halfHeightMultipl, FHitResult& hit) override;
+
+	virtual bool IsGrounded() const override;
+
+	virtual bool IsJumping(float jumpHeadThreshold) const override;
+
+	virtual FTransform GetActorTransform() override;
+#pragma endregion
+
+
 #pragma region Public UPROPERTIES
 	UPROPERTY(EditAnywhere, Category = "VR Simulation", meta = (Tooltip="Player height that will be used in Simulation"))
 	float PlayerPreviewHeight = 186.f;
 
-	UPROPERTY(EditAnywhere, Category = "Adjustments Constants", meta = (DisplayName = "Mesh Offset", Tooltip = "Offset for camera. We cannot manualy edit camera location, cause it is controlled by HMD. But we can shift mesh back in X Axis. Also it is used to adjust IK Camera Position"))
-	FVector MeshOffset = FVector(-10.f, 0.f, 0.f);
+	//UPROPERTY(EditAnywhere, Category = "Adjustments Constants", meta = (DisplayName = "Mesh Offset", Tooltip = "Offset for camera. We cannot manualy edit camera location, cause it is controlled by HMD. But we can shift mesh back in X Axis. Also it is used to adjust IK Camera Position"))
+	//FVector MeshOffset = FVector(0.f, 0.f, 0.f);
 #pragma endregion
 
 private:
@@ -423,24 +415,13 @@ private:
 	FHitResult CurrentGroundHit;//Hit of the ground
 	FHitResult CurrentObstacleHit;//Hit of the obstacle
 	float VerticalVelocity = 0.f;//Velocity applied to the Pawn in -Z direction
-	bool bCanPerformBattleStep;//Can we perform Battle Step?
-	bool bCanRun;//Is Run button pressed
 	bool bCameraInAMesh;//Has camera entered the mesh?
-	float cameraHeadDelta;//Delta between Camera Z coordinate and head bone Z coordinate. we use half of it to place Mesh correctly
-	EVRCharacterState CurrentCharacterState;
-	EVRCharacterState CachedCharacterState;
+	float cameraHeadDelta;//Delta between Camera Z coordinate and head bone Z coordinate. we use half of it to place Mesh correctly	
 	FVector CurrentVelocity;
 	FVector PrevCameraPosition;//Camera Location in the Tracking Space calculated in the previous frame
 	float InitialPlayerHeight;//Height of the player that was calculated during the first start of the game
 	float CurrentCameraFadeOpacity;
 	UVRCharacterAnimInstance* VRCharacterAnimInstance;
 	bool initialPlayerHeightCalculated;
-	UMaterialInstanceDynamic* CreateMaterialInstance(UMaterialInterface* interface);
-	void ApplyMaterialToComponent(UPrimitiveComponent* comp, int32 matindex,
-		UMaterialInterface* materialBase, UMaterialInstanceDynamic*& dynamicInstance);
-	void ApplyMaterialToComponent(UDecalComponent* comp,
-		UMaterialInterface* materialBase, UMaterialInstanceDynamic*& dynamicInstance);
-	void SetDecalColors();
-	void SetDecalsColor(FLinearColor color);
 	void CalculatePlayerHeight();
 };

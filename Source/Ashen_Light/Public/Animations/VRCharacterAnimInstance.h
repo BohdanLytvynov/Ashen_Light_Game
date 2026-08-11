@@ -105,10 +105,7 @@ protected:
 
 	UPROPERTY(BlueprintReadOnly)
 	float UseHeadIK = 1.f;//Used to turn on / off head IK
-
-	UPROPERTY(BlueprintReadOnly)
-	float IsCrouching = 0.f;//Used to turn on / off leg IK
-
+	
 	UPROPERTY(BlueprintReadOnly)
 	float CrouchDepth = 0.f;
 
@@ -132,9 +129,6 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR IK Preview")
 	FVector LeftMotionControllerLocation = FVector(0.f, 0.f, 0.f);
-
-	UPROPERTY(EditDefaultsOnly, Category = "VR IK Preview")
-	FVector NeckOffset = FVector(-10.0f, 0.0f, -8.0f);
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK")
 	float ElbowJointTargetInterpolationConstant = 3.f;
@@ -202,6 +196,12 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "VR LEG IK")
 	float HeadIKInterpolationConstant = 5.f;
 
+	UPROPERTY(EditDefaultsOnly, Category = "VR LEG IK")
+	FString RightFootBoneName = FString("foot_r");
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR LEG IK")
+	FString LeftFootBoneName = FString("foot_l");
+
 	UPROPERTY(EditDefaultsOnly, Category = "VR SPINE IK")
 	FString Spine03SocketName = FString("spine_03_s");
 
@@ -240,6 +240,15 @@ protected:
 
 	UPROPERTY(BlueprintReadOnly)
 	float Spine01Rot;
+
+	UPROPERTY(BlueprintReadOnly)
+	FVector RightFootIKEffector;
+
+	UPROPERTY(BlueprintReadOnly)
+	FVector LeftFootIKEffector;
+
+	UFUNCTION(BlueprintPure)
+	bool IsGrounded() const;
 private:
 	/// <summary>
 	/// Calculate Transform for Head Bone
@@ -326,12 +335,13 @@ private:
 	float handLength;//Length of the hand with scale factor
 	float lowerArmLength;//Length of the lowerArm with scale factor
 	float elbowJointTargetDistance;//Scalar distance from elbow to the Joint Target
-	float leftSpineTargetAngle = 0.f;
-	float rightSpineTargetAngle = 0.f;
+	float leftSpineTargetAngle = 0.f;//Angle for spine rotation when we move left controller forward
+	float rightSpineTargetAngle = 0.f;//Angle for spine rotation when we move right controller forward
 	bool bIsRightGripPressed = false;
 	bool bIsRightTriggerPressed = false;
 	bool bIsLeftGripPressed = false;
 	bool bIsLeftTriggerPressed = false;
+	float CameraHeadDelta = 0.f;
 #pragma endregion
 
 };

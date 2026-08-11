@@ -2,34 +2,47 @@
 
 
 #include "Components/StateManagerComponent.h"
+#include "../../Public/Components/StateComponentBase.h"
 
 // Sets default values for this component's properties
 UStateManagerComponent::UStateManagerComponent(const FObjectInitializer& init) : Super(init)
 {
-	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
-	// off to improve performance if you don't need them.
-	PrimaryComponentTick.bCanEverTick = true;
-
-	// ...
-}
-
-
-// Called when the game starts
-void UStateManagerComponent::BeginPlay()
-{
-	Super::BeginPlay();
-
-	// ...
 	
 }
 
-
-// Called every frame
-void UStateManagerComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+void UStateManagerComponent::OnTick(float DeltaTime)
 {
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	if (CurrentState)
+	{
+		CurrentState->OnStateTick(DeltaTime);
+	}	
+}
 
-	// ...
+uint8 UStateManagerComponent::GetCurrentStateEnum()
+{
+	return CurrentState->GetStateEnum();
+}
+
+void UStateManagerComponent::RegisterState(UStateComponentBase* state)
+{
+	const uint8 Enum = state->GetStateEnum();
+	if (m_EnumStateMap.Contains(Enum))
+		return;
+	m_EnumStateMap.Add(Enum, state);
+}
+
+void UStateManagerComponent::SwitchState(uint8 state)
+{
+	auto pNewState = m_EnumStateMap.Find(state);
+	if (!pNewState || !(*pNewState)) return;
+
+	if (CurrentState)
+	{
+		CurrentState->OnStateExit();
+	}
+	
+	CurrentState = *pNewState;
+	CurrentState->OnStateEnter();
 }
 
 
