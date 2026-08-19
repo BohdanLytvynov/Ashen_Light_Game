@@ -89,6 +89,24 @@ protected:
 	UPROPERTY(VisibleAnywhere)
 	class UStateManagerComponent* LocomotionStateManager;
 
+	UPROPERTY(VisibleAnywhere)
+	UStateManagerComponent* GravityStateManager;
+
+	UPROPERTY(VisibleAnywhere)
+	class UGroundedStateComponent* GroundedStateComponent;
+
+	UPROPERTY(VisibleAnywhere)
+	class UInAirStateComponent* InAirStateComponent;
+
+	UPROPERTY(VisibleAnywhere)
+	class UInMeshStateComponent* InMeshStateComponent;
+
+	UPROPERTY(VisibleAnywhere)
+	class UClimbingStateComponent* ClimbingStateComponent;
+
+	UPROPERTY(VisibleAnywhere)
+	class UCameraFadeSensor* CameraFadeSensor;
+
 #pragma endregion
 
 #pragma region UPROPERTIES
@@ -102,14 +120,20 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "VR Locomotion", meta = (DisplayName = "Run Speed"))
 	float runSpeed = 300.f;
 
+	UPROPERTY(EditAnywhere, Category = "VR Locomotion")
+	float JumpWaitTimer = 5.f;
+
 	UPROPERTY(EditAnywhere, Category = "VR Locomotion", meta = (DisplayName = "Ground Detection Threshold", Tooltip = "Value that will be added to the end point of the Sphere Trace for Ground Detection"))
 	float GroundDetectionThreshold = 10.f;
 
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion")
+	UPROPERTY(EditAnywhere, Category = "VR Locomotion Thresholds")
 	float CrouchThreshold = 10.f;
 
+	UPROPERTY(EditAnywhere, Category = "VR Locomotion Thresholds")
+	float JumpThreshold = 10.f;
+	
 	UPROPERTY(EditAnywhere, Category = "VR Locomotion Gravity", meta = (DisplayName = "Gravity Constant g"))
-	float GravityConstant = -980.f; //cm / sec^2
+	float GravityConstant = 980.f; //cm / sec^2
 
 	UPROPERTY(EditAnywhere, Category = "VR Locomotion Gravity", meta = (DisplayName = "Max Fall Velocity"))
 	float MaxFallVelocity = 2000.f; //cm / sec
@@ -117,10 +141,7 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "VR Locomotion Gravity", meta = (DisplayName = "Terminal Velocity"))
 	float TerminalVelocity = -4000.f; //cm / sec
 	
-	UPROPERTY(EditAnywhere, Category = "VR Camera Fade", meta = (DisplayName = "Fade Chech Radius", ClampMin = "0.001", UIMin = "0.001"))
-	float FadeCheckRadius = 14.f;
-
-	UPROPERTY(EditAnywhere, Category = "VR Camera Fade", meta = (DisplayName = "Camera Fade Distance", ClampMin = "0.001", UIMin = "0.001"))
+	UPROPERTY(EditAnywhere, Category = "VR Camera Fade", meta = ( ClampMin = "0.001", UIMin = "0.001"))
 	float CameraFadeDistance = 5.f;
 
 	UPROPERTY()
@@ -246,7 +267,7 @@ protected:
 	/// Checks condition when we need to apply camera fade effect
 	/// </summary>
 	/// <param name="DeltaTime"></param>
-	void CheckCameraFade(float DeltaTime);
+	//void CheckCameraFade(float DeltaTime);
 	/// <summary>
 	/// Apply camera fade effect to the special fade plane
 	/// </summary>
@@ -270,6 +291,8 @@ protected:
 	/// </summary>
 	/// <param name="DeltaTime"></param>
 	void ApplyRotationFromCameraToCapsule(float DeltaTime);
+
+	bool CanJump() const;
 #pragma endregion
 
 #pragma region Editor Callable functions
@@ -322,7 +345,7 @@ public:
 	float PlayerAnchorZoneHeight = 300.f;
 
 #pragma region IStateDriven
-	virtual void Move(const FVector& dir, float value) override;
+	virtual void Move(const FVector& dir, float value, bool instant = false) override;
 
 	/// <summary>
 	/// Stops all the movement immediatly
@@ -393,18 +416,21 @@ public:
 
 	virtual bool IsGrounded() const override;
 
-	virtual bool IsJumping(float jumpHeadThreshold) const override;
-
 	virtual FTransform GetActorTransform() override;
+
+	void JumpPhysical(float height) override;
+
+	void JumpTracking() override;
+
+	virtual class UCameraFadeSensor* GetCameraFadeSensor() const override;
 #pragma endregion
 
 
 #pragma region Public UPROPERTIES
+
 	UPROPERTY(EditAnywhere, Category = "VR Simulation", meta = (Tooltip="Player height that will be used in Simulation"))
 	float PlayerPreviewHeight = 186.f;
 
-	//UPROPERTY(EditAnywhere, Category = "Adjustments Constants", meta = (DisplayName = "Mesh Offset", Tooltip = "Offset for camera. We cannot manualy edit camera location, cause it is controlled by HMD. But we can shift mesh back in X Axis. Also it is used to adjust IK Camera Position"))
-	//FVector MeshOffset = FVector(0.f, 0.f, 0.f);
 #pragma endregion
 
 private:
@@ -412,8 +438,10 @@ private:
 	FVector prevRightHandLocation;//Right Hand Location in Tracking Space calculated in the previous frame
 	bool bIsObstacleHit;//Do we hit some Static or Dynamic Mesh?
 	bool bIsGrounded;//Do we stay on a ground
+	bool bIsJumping;
 	FHitResult CurrentGroundHit;//Hit of the ground
 	FHitResult CurrentObstacleHit;//Hit of the obstacle
+	FHitResult CameraInMeshHit;//Camera in Mesh
 	float VerticalVelocity = 0.f;//Velocity applied to the Pawn in -Z direction
 	bool bCameraInAMesh;//Has camera entered the mesh?
 	float cameraHeadDelta;//Delta between Camera Z coordinate and head bone Z coordinate. we use half of it to place Mesh correctly	

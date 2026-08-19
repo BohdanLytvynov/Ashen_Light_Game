@@ -1,12 +1,12 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "Components/VRCharacter/TrackingSpaceMovementComponent.h"
+#include "Components/VRCharacter/Movement/TrackingSpaceMovementComponent.h"
 #include "Camera/CameraComponent.h"
-#include "../../../Public/Characters/VRCharacter.h"
+#include "../../../../Public/Characters/VRCharacter.h"
 #include "Components/CapsuleComponent.h"
-#include "../../../Public/Components/StateManagerComponent.h"
-#include "../../../Public/Enums.h"
+#include "../../../../Public/Components/Base/StateManagerComponent.h"
+#include "../../../../Public/Enums.h"
 
 UTrackingSpaceMovementComponent::UTrackingSpaceMovementComponent(const FObjectInitializer& init) : Super(init)
 {
@@ -95,8 +95,5 @@ void UTrackingSpaceMovementComponent::HandleJump(float DeltaTime)
 {
 	IVRCharacterInterface* vrChar = GetContext();
 	if (!vrChar) return;
-	if (vrChar->IsJumping(JumpThreshold))//We get the gesture for jump (B + Extreme change in height)
-	{
 
-	}
 }

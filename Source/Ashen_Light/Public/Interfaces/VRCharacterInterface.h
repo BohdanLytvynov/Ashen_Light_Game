@@ -31,5 +31,7 @@ public:
 	virtual bool IsSwiningArms(float DeltaTime) = 0;
 	virtual bool CheckObstacles(float obstacleDistDetection, float halfHeightMultipl, FHitResult& OutHit) = 0;
 	virtual bool CheckObstaclesInDirection(const FVector& NormDirection, float obstacleDistDetection, float halfHeightMultipl, FHitResult& hit) = 0;
-	virtual bool IsJumping(float jumpHeadThreshold) const = 0;
+	virtual void JumpPhysical(float height) = 0;
+	virtual void JumpTracking() = 0;
+	virtual class UCameraFadeSensor* GetCameraFadeSensor() const = 0;
 };

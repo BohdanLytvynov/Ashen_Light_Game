@@ -3,28 +3,21 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Components/StateComponentBase.h"
-#include "../../../Public/Interfaces/VRCharacterInterface.h"
+#include "../Base/VRCharacterComponentBase.h"
+#include "../../../../Public/Interfaces/VRCharacterInterface.h"
 #include "TrackingSpaceMovementComponent.generated.h"
 
 /**
  * 
  */
 UCLASS()
-class ASHEN_LIGHT_API UTrackingSpaceMovementComponent : public UStateComponentBase
+class ASHEN_LIGHT_API UTrackingSpaceMovementComponent : public UVRCharacterComponentBase
 {
 	GENERATED_BODY()
 
 public:
 	UTrackingSpaceMovementComponent(const FObjectInitializer& init);
 	void OnStateTick(float DeltaTime) override;
-
-	virtual IVRCharacterInterface* GetContext() override
-	{
-		IStateDriven* context = UStateComponentBase::GetContext();
-		if (!context) return nullptr;
-		return Cast<IVRCharacterInterface>(context);
-	}
 
 protected:
 
@@ -33,10 +26,7 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VR Locomotion Obstacle Detection", meta = (ClampMin = "0.0", ClampMax = "90.0"))
 	float StopMovementAngleThreshold = 20.0f;
-
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion Jump Threshold")
-	float JumpThreshold = 15.f;
-
+	
 	UPROPERTY(EditAnywhere, Category = "VR Locomotion Traces", meta = (Tooltip = "[0 ; 1] multiplier to adjust height of the tracing capsule. 1 - equal to the height of the current capsule"))
 	float TraceCapsuleHalfHeightMultipl = 0.7f;
 

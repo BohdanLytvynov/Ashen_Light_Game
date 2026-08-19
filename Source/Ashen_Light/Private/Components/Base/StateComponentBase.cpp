@@ -1,8 +1,8 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "Components/StateComponentBase.h"
-#include "Components/StateManagerComponent.h"
+#include "Components/Base/StateComponentBase.h"
+#include "Components/Base/StateManagerComponent.h"
 
 // Sets default values for this component's properties
 UStateComponentBase::UStateComponentBase(const FObjectInitializer& init) : Super(init)
@@ -17,6 +17,11 @@ void UStateComponentBase::InitializeState(uint8 stateEnum, IStateDriven* stateDr
 	m_StateEnum = stateEnum;
 	m_Context = stateDriven;
 	m_StateManagerComponent = stateManager;
+}
+
+UStateManagerComponent* UStateComponentBase::GetStateManager()
+{
+	return m_StateManagerComponent;
 }
 
 
