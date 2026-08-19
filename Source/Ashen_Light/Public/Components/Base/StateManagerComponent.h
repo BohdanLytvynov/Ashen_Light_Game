@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "../../RawCpp/RectMatrix.h"
+#include "RawCpp/RectMatrix.h"
 #include "StateBlackboardBase.h"
 #include "StateManagerComponent.generated.h"
 

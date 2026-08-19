@@ -3,10 +3,10 @@
 
 #include "Components/VRCharacter/Movement/TrackingSpaceMovementComponent.h"
 #include "Camera/CameraComponent.h"
-#include "../../../../Public/Characters/VRCharacter.h"
+#include "Characters/VRCharacter.h"
 #include "Components/CapsuleComponent.h"
-#include "../../../../Public/Components/Base/StateManagerComponent.h"
-#include "../../../../Public/Enums.h"
+#include "Components/Base/StateManagerComponent.h"
+#include "Enums.h"
 
 UTrackingSpaceMovementComponent::UTrackingSpaceMovementComponent(const FObjectInitializer& init) : Super(init)
 {

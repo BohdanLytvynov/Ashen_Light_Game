@@ -4,8 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "Characters/CharacterBase.h"
-#include "../../Public/Enums.h"
-#include "../../Public/Interfaces/VRCharacterInterface.h"
+#include "Enums.h"
+#include "Interfaces/VRCharacterInterface.h"
 #include "VRCharacter.generated.h"
 /**
  * 

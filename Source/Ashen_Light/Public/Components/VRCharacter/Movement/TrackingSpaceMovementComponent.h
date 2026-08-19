@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "../Base/VRCharacterComponentBase.h"
-#include "../../../../Public/Interfaces/VRCharacterInterface.h"
+#include "Interfaces/VRCharacterInterface.h"
 #include "TrackingSpaceMovementComponent.generated.h"
 
 /**

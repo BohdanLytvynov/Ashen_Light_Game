@@ -2,7 +2,7 @@
 
 
 #include "Animations/VRCharacterAnimInstance.h"
-#include "../../Public/Characters/VRCharacter.h"
+#include "Characters/VRCharacter.h"
 #include "Camera/CameraComponent.h"
 #include "MotionControllerComponent.h"
 #include "DrawDebugHelpers.h"

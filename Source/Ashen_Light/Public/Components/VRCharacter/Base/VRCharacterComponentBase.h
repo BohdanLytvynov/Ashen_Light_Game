@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "../../Base/StateComponentBase.h"
-#include "../../../../Public/Interfaces/VRCharacterInterface.h"
+#include "Interfaces/VRCharacterInterface.h"
 #include "VRCharacterComponentBase.generated.h"
 
 /**

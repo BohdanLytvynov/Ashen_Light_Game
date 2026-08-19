@@ -2,7 +2,7 @@
 
 
 #include "Components/VRCharacter/Gravity/InAirStateComponent.h"
-#include "../../../../Public/Components/VRCharacter/Sensors/CameraFadeSensor.h"
+#include "Components/VRCharacter/Sensors/CameraFadeSensor.h"
 
 UInAirStateComponent::UInAirStateComponent(const FObjectInitializer& init) : Super(init)
 {

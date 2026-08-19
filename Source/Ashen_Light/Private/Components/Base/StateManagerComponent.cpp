@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-#include "../../../Public/Components/Base/StateManagerComponent.h"
-#include "../../../Public/Components/Base/StateComponentBase.h"
+#include "Components/Base/StateManagerComponent.h"
+#include "Components/Base/StateComponentBase.h"
 
 // Sets default values for this component's properties
 UStateManagerComponent::UStateManagerComponent(const FObjectInitializer& init) : Super(init)
