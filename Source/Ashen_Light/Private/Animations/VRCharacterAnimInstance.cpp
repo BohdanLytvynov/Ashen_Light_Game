@@ -2,10 +2,11 @@
 
 
 #include "Animations/VRCharacterAnimInstance.h"
-#include "../../Public/Characters/VRCharacter.h"
+#include "Characters/VRCharacter.h"
 #include "Camera/CameraComponent.h"
 #include "MotionControllerComponent.h"
 #include "DrawDebugHelpers.h"
+#include "Components/CapsuleComponent.h"
 
 
 UVRCharacterAnimInstance::UVRCharacterAnimInstance(const FObjectInitializer& init) : Super(init)
@@ -34,6 +35,12 @@ void UVRCharacterAnimInstance::Initialize()
 		m_Initialized = true;
 		return;
 	}
+}
+
+bool UVRCharacterAnimInstance::IsGrounded() const
+{
+	if (!Self) return false;
+	return Self->IsGrounded();
 }
 
 bool UVRCharacterAnimInstance::IsInGameWorld()
@@ -120,6 +127,20 @@ void UVRCharacterAnimInstance::CalculateSpineRotation(float DeltaTime, bool debu
 {
 	CalculateSpineRotationAccordingToTheControllerLocation(true, DeltaTime, debug);
 	CalculateSpineRotationAccordingToTheControllerLocation(false, DeltaTime, debug);
+}
+
+void UVRCharacterAnimInstance::CalculateFootIKEffectors(AActor* current, float DeltaTime, bool debug)
+{
+	CalculateFootIKEffector(current, true, DeltaTime, debug);
+	CalculateFootIKEffector(current, false, DeltaTime, debug);
+}
+
+void UVRCharacterAnimInstance::CalculateFootHeight()
+{
+	if (!SkeletalMesh) return;
+	FVector start = SkeletalMesh->GetSocketLocation(FName(LeftFootBoneSocketName));
+	FVector end = SkeletalMesh->GetSocketLocation(FName(BallSocketName));
+	footHeight = FVector::Dist(start, end);
 }
 
 float UVRCharacterAnimInstance::GetUniversalScaleFactorForPreview()
@@ -264,6 +285,73 @@ void UVRCharacterAnimInstance::CalculateElbowJointTarget(bool right, float delta
 	}
 }
 
+void UVRCharacterAnimInstance::CalculateFootIKEffector(AActor* currentActor, bool right, float DeltaTime, bool debug)
+{
+	UWorld* w = GetWorld();
+	if (!SkeletalMesh || !Self || !w || !currentActor) return;
+	FString footSocket = right ? RightFootBoneSocketName : LeftFootBoneSocketName;
+	FVector wFootSocketPos = SkeletalMesh->GetSocketLocation(FName(footSocket));
+	UCapsuleComponent* caps = Self->GetCapsuleComponent();
+	if (!caps) return;
+	FVector wCaps = caps->GetComponentLocation();
+	FVector start = FVector(wFootSocketPos.X, wFootSocketPos.Y, wCaps.Z);
+	FVector end = start - FVector(0.f, 0.f, caps->GetScaledCapsuleHalfHeight() + FloorDetectionThreshold);
+	FHitResult outHit;
+	bool obstacleHit;
+	FHitResult obstacleHitResult;
+	AActor* obstacle = Self->GetObstacle(obstacleHit, obstacleHitResult);
+	FCollisionQueryParams queryParams;
+	if (obstacleHit && obstacle)
+	{
+		queryParams.AddIgnoredActor(obstacle);
+	}
+	queryParams.AddIgnoredActor(currentActor);
+	bool gHit = w->LineTraceSingleByChannel(outHit, start, end, ECollisionChannel::ECC_WorldStatic, queryParams);
+	FVector TargetEffector = FVector::ZeroVector;
+	if (gHit && outHit.bBlockingHit)
+	{
+		float rawFloorDelta = outHit.ImpactPoint.Z - wFootSocketPos.Z;
+		float crouchDepth = 0.f;
+		bool isCrouching = Self->IsCrouching(&crouchDepth);
+		float finalDelta = 0.f;
+		if (right)
+		{
+			finalDelta = -(rawFloorDelta + crouchDepth);
+			if (isCrouching)
+			{
+				finalDelta += footHeight * 0.5f;
+			}
+		}
+		else
+		{
+			finalDelta = rawFloorDelta + crouchDepth;
+			if (isCrouching)
+			{
+				finalDelta -= footHeight * 0.5f;
+			}
+		}
+		
+		TargetEffector = FVector(finalDelta, 0.f, 0.f);
+	}
+	float InterpSpeed = 15.0f;
+	if (right)
+	{
+		RightFootEffectorLocation = FMath::VInterpTo(RightFootEffectorLocation, TargetEffector, DeltaTime, InterpSpeed);
+	}
+	else
+	{
+		LeftFootEffectorLocation = FMath::VInterpTo(LeftFootEffectorLocation, TargetEffector, DeltaTime, InterpSpeed);
+	}
+	if (!debug) return;
+	if (gHit)
+	{
+		DrawDebugSphere(w, outHit.ImpactPoint, 5.f, 8, FColor::Red);
+	}
+
+	DrawDebugSphere(w, start, 5.f, 8, FColor::Blue);
+	DrawDebugSphere(w, end, 5.f, 8, FColor::Green);
+}
+
 void UVRCharacterAnimInstance::CalculateSpineRotationAccordingToTheControllerLocation(bool right, float deltaTime, bool debug)
 {
 	if (!SkeletalMesh) return;
@@ -330,6 +418,33 @@ void UVRCharacterAnimInstance::CalculateSpineRotationAccordingToTheControllerLoc
 	}
 }
 
+void UVRCharacterAnimInstance::CalculateLegIkEnable(float DeltaTime)
+{
+	if (!Self) return;
+	const bool isGrounded = Self->IsGrounded();
+	if (!isGrounded)
+	{
+		LegIkEnable = FMath::FInterpTo(LegIkEnable, 0.f, DeltaTime, LegIKInterpolationConstant);
+	}
+	else
+	{
+		LegIkEnable = FMath::FInterpTo(LegIkEnable, 1.f, DeltaTime, LegIKInterpolationConstant);
+	}
+}
+
+void UVRCharacterAnimInstance::CalculateLayerBlendForLegs(float DeltaTime)
+{
+	if (!Self) return;
+	if (Self->IsJumping())
+	{
+		EnableLayerBlendForLegs = FMath::FInterpTo(EnableLayerBlendForLegs, 1.f, DeltaTime, LayerBlendInterpolationConstant);
+	}
+	else
+	{
+		EnableLayerBlendForLegs = FMath::FInterpTo(EnableLayerBlendForLegs, 0.f, DeltaTime, LayerBlendInterpolationConstant);
+	}
+}
+
 void UVRCharacterAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 {
 	Super::NativeUpdateAnimation(DeltaSeconds);
@@ -342,6 +457,8 @@ void UVRCharacterAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		GetCameraIKTransform();
 		GetMotionControllersIKTransform();
 		CalculateCrouching(DeltaSeconds);
+		CalculateLegIkEnable(DeltaSeconds);
+		CalculateLayerBlendForLegs(DeltaSeconds);
 	}
 }
 
@@ -409,15 +526,5 @@ void UVRCharacterAnimInstance::CalculateMotionControllerTransform(
 	//Rotation will be used in Modify Bone Mode to rotate the wrist
 	motionControllerTransform.SetRotation(NewRotation);
 	motionControllerTransform.SetScale3D(FVector::OneVector);
-}
-
-bool UVRCharacterAnimInstance::IsGrounded() const
-{
-	if (Self)
-	{
-		return Self->IsGrounded();
-	}
-
-	return false;
 }
 

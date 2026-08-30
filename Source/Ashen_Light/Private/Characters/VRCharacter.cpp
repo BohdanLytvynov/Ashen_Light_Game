@@ -11,13 +11,22 @@
 #include "Components/WidgetInteractionComponent.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Misc/CoreDelegates.h"
-#include "../../Public/Animations/VRCharacterAnimInstance.h"
-#include "../../Public/Enums.h"
-#include "../../Public/Components/StateManagerComponent.h"
-#include "../../Public/Components/VRCharacter/PhysicalMovementComponent.h"
-#include "../../Public/Components/VRCharacter/TrackingSpaceMovementComponent.h"
+#include "Animations/VRCharacterAnimInstance.h"
+#include "Enums.h"
+#include "Components/Base/StateManagerComponent.h"
+#include "Components/VRCharacter/Movement/PhysicalMovementComponent.h"
+#include "Components/VRCharacter/Movement/TrackingSpaceMovementComponent.h"
+#include "Components/VRCharacter/Gravity/ClimbingStateComponent.h"
+#include "Components/VRCharacter/Gravity/GroundedStateComponent.h"
+#include "Components/VRCharacter/Gravity/InAirStateComponent.h"
+#include "Components/VRCharacter/Gravity/InMeshStateComponent.h"
+#include "Components/VRCharacter/Sensors/CameraFadeSensor.h"
+#include "Components/VRCharacter/Sensors/GroundHitSensor.h"
+#include "Components/Base/VelocitySensor.h"
 #include "IXRTrackingSystem.h"
-
+#include "DrawDebugHelpers.h"
+#include "Components/VRCharacter/Sensors/ObstacleSensor.h"
+#include "Constants.h"
 
 AVRCharacter::AVRCharacter(const FObjectInitializer& init) : Super(init)
 {
@@ -107,37 +116,148 @@ AVRCharacter::AVRCharacter(const FObjectInitializer& init) : Super(init)
 	PlayerAnchorDecalComponent->SetupAttachment(CameraComponent);	
 	PlayerAnchorDecalComponent->SetRelativeRotation(FRotator(-90.f, 0.f, 0.f));//Rotate it, so X axis will be pointed down
 	PlayerAnchorDecalComponent->SetUsingAbsoluteRotation(true);
-
+	//Movement Component
 	PawnMovement = CreateDefaultSubobject<UFloatingPawnMovement>(TEXT("Pawn Floating Movement"));
-
-	//Configure Statemanger
-	LocomotionStateManager = CreateDefaultSubobject<UStateManagerComponent>(TEXT("State Manager Component"));
-	if (!LocomotionStateManager) return;
-	PhysicalMovementComponent = CreateDefaultSubobject<UPhysicalMovementComponent>(TEXT("Physical Movement"));
-	if (PhysicalMovementComponent)
+	m_ActorsToIgnore.Add(this);
+	//Sensors
+	CameraFadeSensor = CreateDefaultSubobject<UCameraFadeSensor>(TEXT("Camera Fade Sensor"));
+	if (CameraFadeSensor)
 	{
-		PhysicalMovementComponent->InitializeState((uint8)ELocomotionSpace::ELS_Physical, this, LocomotionStateManager);
+		CameraFadeSensor->SetIgnoredActors(&m_ActorsToIgnore);
+		CameraFadeSensor->SetTrackingComponent(CameraComponent);
 	}
-	TrackingSpaceMovementComponent = CreateDefaultSubobject<UTrackingSpaceMovementComponent>(TEXT("Tracking Space Movement"));
-	if (TrackingSpaceMovementComponent)
+	GroundHitSensor = CreateDefaultSubobject<UGroundHitSensor>(TEXT("Ground Hit Sensor"));
+	if (GroundHitSensor)
 	{
-		TrackingSpaceMovementComponent->InitializeState((uint8)ELocomotionSpace::ELS_TrackingSpace, this, LocomotionStateManager);
+		GroundHitSensor->SetIgnoredActors(&m_ActorsToIgnore);
+		GroundHitSensor->SetTrackingComponent(CameraComponent);
 	}
-	LocomotionStateManager->RegisterState(PhysicalMovementComponent);
-	LocomotionStateManager->RegisterState(TrackingSpaceMovementComponent);
-	LocomotionStateManager->SwitchState((uint8)ELocomotionSpace::ELS_TrackingSpace);
+	CameraVelocitySensor = CreateDefaultSubobject<UVelocitySensor>(TEXT("Camera Velocity Sensor"));
+	if (CameraVelocitySensor)
+	{
+		CameraVelocitySensor->ConfigureSpace(RTS_World);
+		CameraVelocitySensor->SetTrackingComponent(CameraComponent);
+	}
+	RightMotionControllerVelocitySensor = CreateDefaultSubobject<UVelocitySensor>(TEXT("Right Motion Controller Velocity Sensor"));
+	if (RightMotionControllerVelocitySensor)
+	{
+		RightMotionControllerVelocitySensor->ConfigureSpace(RTS_Component);
+		RightMotionControllerVelocitySensor->SetTrackingComponent(RightMotionController);
+	}
+	LeftMotionControllerVelocitySensor = CreateDefaultSubobject<UVelocitySensor>(TEXT("Left Motion Controller velocity Sensor"));
+	if (LeftMotionControllerVelocitySensor)
+	{
+		LeftMotionControllerVelocitySensor->ConfigureSpace(RTS_Component);
+		LeftMotionControllerVelocitySensor->SetTrackingComponent(LeftMotionController);
+	}
+	ObstacleSensor = CreateDefaultSubobject<UObstacleSensor>(TEXT("Obstacle Sensor"));
+	if (ObstacleSensor)
+	{
+		ObstacleSensor->SetIgnoredActors(&m_ActorsToIgnore);
+		ObstacleSensor->SetTrackingComponent(CapsuleCollisionComponent);
+	}
+	GlobalStateBlackboard = NewObject<UStateBlackboard>();
+	//Configure State Managers
+	//Locomotion
+	LocomotionStateManager = CreateDefaultSubobject<UStateManagerComponent>(TEXT("Locomotion State Manager Component"));
+	if (LocomotionStateManager)
+	{
+		PhysicalMovementComponent = CreateDefaultSubobject<UPhysicalMovementComponent>(TEXT("Physical Movement"));
+		if (PhysicalMovementComponent)
+		{
+			PhysicalMovementComponent->InitializeState(ELocomotionSpace::ELS_Physical, this, LocomotionStateManager);
+		}
+		TrackingSpaceMovementComponent = CreateDefaultSubobject<UTrackingSpaceMovementComponent>(TEXT("Tracking Space Movement"));
+		if (TrackingSpaceMovementComponent)
+		{
+			TrackingSpaceMovementComponent->InitializeState(ELocomotionSpace::ELS_TrackingSpace, this, LocomotionStateManager);
+		}
+		LocomotionStateManager->RegisterState(PhysicalMovementComponent);
+		LocomotionStateManager->RegisterState(TrackingSpaceMovementComponent);
+		LocomotionStateManager->BuildStateMatrix(2);
+		LocomotionStateManager->ConfigureStateMatrix([](FRectMatrix<bool>* m)
+			{
+				m->Set(true, ELocomotionSpace::ELS_Physical, ELocomotionSpace::ELS_TrackingSpace);
+				m->Set(true, ELocomotionSpace::ELS_TrackingSpace, ELocomotionSpace::ELS_Physical);
+			});
+		LocomotionStateManager->AddGlobalBlackBoard(GlobalStateBlackboard);
+		LocomotionStateManager->SwitchState(ELocomotionSpace::ELS_TrackingSpace);
+	}	
 
-	bIsObstacleHit = false;
+	//Gravity
+	GravityStateManager = CreateDefaultSubobject<UStateManagerComponent>(TEXT("Gravity State Manager Component"));
+	if (GravityStateManager)
+	{
+		GroundedStateComponent = CreateDefaultSubobject<UGroundedStateComponent>(TEXT("Grounded State Component"));
+		if (GroundedStateComponent)
+		{
+			GroundedStateComponent->InitializeState(EGravityState::EGS_Grounded, this, GravityStateManager);
+		}
+		InAirStateComponent = CreateDefaultSubobject<UInAirStateComponent>(TEXT("In Air State Component"));
+		if (InAirStateComponent)
+		{
+			InAirStateComponent->InitializeState(EGravityState::EGS_InAir, this, GravityStateManager);
+		}
+		InMeshStateComponent = CreateDefaultSubobject<UInMeshStateComponent>(TEXT("In Mesh State Component"));
+		if (InMeshStateComponent)
+		{
+			InMeshStateComponent->InitializeState(EGravityState::EGS_InMesh, this, GravityStateManager);
+		}
+		ClimbingStateComponent = CreateDefaultSubobject<UClimbingStateComponent>(TEXT("Climbing State Component"));
+		if (ClimbingStateComponent)
+		{
+			ClimbingStateComponent->InitializeState(EGravityState::EGS_Climbing, this, GravityStateManager);
+		}
+		GravityStateManager->RegisterState(GroundedStateComponent);
+		GravityStateManager->RegisterState(InAirStateComponent);
+		GravityStateManager->RegisterState(InMeshStateComponent);
+		GravityStateManager->RegisterState(ClimbingStateComponent);
+		GravityStateManager->BuildStateMatrix(4);
+		GravityStateManager->ConfigureStateMatrix([](FRectMatrix<bool>* m) 
+			{
+				m->Set(true, EGravityState::EGS_InAir, EGravityState::EGS_Grounded);
+				m->Set(true, EGravityState::EGS_InAir, EGravityState::EGS_Climbing);
+				m->Set(true, EGravityState::EGS_InAir, EGravityState::EGS_InMesh);
 
-	CurrentVelocity = FVector::ZeroVector;
-	PrevCameraPosition = FVector::ZeroVector;
-	initialPlayerHeightCalculated = false;
-	bCameraInAMesh = false;
+				m->Set(true, EGravityState::EGS_Grounded, EGravityState::EGS_InAir);
+				m->Set(true, EGravityState::EGS_Grounded, EGravityState::EGS_Climbing);
+				m->Set(true, EGravityState::EGS_Grounded, EGravityState::EGS_InMesh);
+
+				m->Set(true, EGravityState::EGS_Climbing, EGravityState::EGS_InAir);
+				m->Set(true, EGravityState::EGS_Climbing, EGravityState::EGS_Grounded);
+				m->Set(true, EGravityState::EGS_Climbing, EGravityState::EGS_InMesh);
+
+				m->Set(true, EGravityState::EGS_InMesh, EGravityState::EGS_InAir);
+				m->Set(true, EGravityState::EGS_InMesh, EGravityState::EGS_Grounded);
+			});
+		GravityStateManager->AddGlobalBlackBoard(GlobalStateBlackboard);
+		GravityStateManager->SwitchState(EGravityState::EGS_InAir);
+	}
+
+	initialPlayerMetricsCalculated = false;
+}
+
+bool AVRCharacter::IsJumping() const
+{
+	if (!GlobalStateBlackboard) return false;
+	bool pendingJump = false;
+	if (!GlobalStateBlackboard->TryGetValue(Constants::JumpState::PendingJumping, pendingJump))
+	{
+		return false;
+	}
+	return pendingJump;
 }
 
 void AVRCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	//We need this to ensure that Tick Component of the UFloatingPawnMovement will be executed first then -> VRCharacter's Tick function 
+	if (GetMesh() && PawnMovement)
+	{
+		GetMesh()->PrimaryComponentTick.AddPrerequisite(PawnMovement, PawnMovement->PrimaryComponentTick);
+	}
+
 	bool isInVR = GEngine && GEngine->XRSystem.IsValid() && GEngine->XRSystem->IsHeadTrackingAllowed();
 	//We are in VR Preview Mode
 	if (isInVR)
@@ -167,23 +287,33 @@ void AVRCharacter::BeginPlay()
 	//Configure Decals
 	ConfigureDecalSize(DeadZoneDecalComponent, DeadZoneHeight, DeadZoneRadius, true);
 	ConfigureDecalSize(ActiveZoneComponent, ActiveZoneHeight, ActiveZoneRadius, true);
-	ConfigureDecalSize(PlayerAnchorDecalComponent, PlayerAnchorZoneHeight, PlayerAnchorZoneRadius, true);
-
-	//Set Initial Location of the motion controllers and Camera in Tracking Space when the game begins
-	//Need this for Velocity Calculations
-	if (LeftMotionController)
+	ConfigureDecalSize(PlayerAnchorDecalComponent, PlayerAnchorZoneHeight, PlayerAnchorZoneRadius, true);	
+	
+	if (LeftMotionControllerVelocitySensor)
 	{
-		prevLeftHandLocation = LeftMotionController->GetRelativeLocation();
+		LeftMotionControllerVelocitySensor->SyncPosition();
+	}
+	if (RightMotionControllerVelocitySensor)
+	{
+		RightMotionControllerVelocitySensor->SyncPosition();
+	}
+	if (CameraVelocitySensor)
+	{
+		CameraVelocitySensor->SyncPosition();
+	}
+	if (LocomotionStateManager)
+	{
+		LocomotionStateManager->BeginPlay();
+	}
+	if (GravityStateManager)
+	{
+		GravityStateManager->BeginPlay();
 	}
 
-	if (RightMotionController)
+	FadeDynamicMaterial = UMaterialInstanceDynamic::Create(FadeMaterialBase, this);
+	if (FadeDynamicMaterial && CameraFadeComponent)
 	{
-		prevRightHandLocation = RightMotionController->GetRelativeLocation();
-	}
-
-	if (CameraComponent)
-	{
-		PrevCameraPosition = CameraComponent->GetComponentLocation();
+		CameraFadeComponent->SetMaterial(0, FadeDynamicMaterial);
 	}
 }
 
@@ -197,9 +327,17 @@ void AVRCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void AVRCharacter::OnHMD_Recentered()
 {
 	//When we recalibrate we need to get the new camera position relative to the Tracking Space
-	if (CameraComponent)
+	if (CameraVelocitySensor)
 	{
-		PrevCameraPosition = CameraComponent->GetComponentLocation();
+		CameraVelocitySensor->SyncPosition();
+	}
+	if (LeftMotionControllerVelocitySensor)
+	{
+		LeftMotionControllerVelocitySensor->SyncPosition();
+	}
+	if (RightMotionControllerVelocitySensor)
+	{
+		RightMotionControllerVelocitySensor->SyncPosition();
 	}
 	//Start Recalibration of the Capsule and Mesh
 	GetWorldTimerManager().SetTimerForNextTick(this, &AVRCharacter::RecalibrateCapsuleAndMeshComponent);
@@ -217,8 +355,18 @@ void AVRCharacter::RecenterTrackingSpaceToLocation(FVector TargetWorldLocation)
 	FVector NewOriginWorldLoc = TrackingSpaceOrigin->GetComponentLocation() + Offset2D;
 	TrackingSpaceOrigin->SetWorldLocation(NewOriginWorldLoc);
 	//Recalculate Camera previous Location
-	PrevCameraPosition = CameraComponent->GetComponentLocation();
-	
+	if (CameraVelocitySensor)
+	{
+		CameraVelocitySensor->SyncPosition();
+	}
+	if (LeftMotionControllerVelocitySensor)
+	{
+		LeftMotionControllerVelocitySensor->SyncPosition();
+	}
+	if (RightMotionControllerVelocitySensor)
+	{
+		RightMotionControllerVelocitySensor->SyncPosition();
+	}
 	RecalibrateCapsuleAndMeshComponent();
 }
 
@@ -252,20 +400,20 @@ float AVRCharacter::GetGroundVelocityRatio() const
 	return FMath::Clamp(PawnMovement->Velocity.Size2D() / runSpeed, 0.f, 1.f);
 }
 
-void AVRCharacter::CalculatePlayerHeight()
+void AVRCharacter::InitializeBodyMetrics()
 {
-	if (!initialPlayerHeightCalculated && CameraComponent)
+	if (!initialPlayerMetricsCalculated && CameraComponent)
 	{
 		float CurrentCamZ = CameraComponent->GetRelativeLocation().Z;
 		if (CurrentCamZ > 80.0f)
 		{
 			InitialPlayerHeight = CurrentCamZ;
-			initialPlayerHeightCalculated = true;
+			initialPlayerMetricsCalculated = true;
 			UVRCharacterAnimInstance* inst = GetCharAnimInstance();
 			if (inst)
 			{
 				inst->CalculateUniversalScaleFactor(CurrentCamZ);
-
+				inst->CalculateFootHeight();
 			}
 		}
 	}
@@ -395,22 +543,44 @@ void AVRCharacter::ConfigureDecalSize(UDecalComponent* decal, float thicknes, fl
 		decal->MarkRenderStateDirty();
 }
 
-float AVRCharacter::GetMotionControllerSpeed(UMotionControllerComponent* motionController, FVector* prevMotionControllerPosition, float DeltaTime) const
+AActor* AVRCharacter::GetObstacle(bool& outHit, FHitResult& outHitResult) const
 {
-	float res = -1.f;
-	if (!motionController || DeltaTime == 0 || !prevMotionControllerPosition) return res;
-	//Get location of the motion controller in the tracking space
-	const FVector MotionControllerLocationInVROriginSpace = motionController->GetRelativeLocation();
-	//v = ds/dt. ds = |start - end|, as dt -> 0 we get the Instant Velocity
-	res = ((MotionControllerLocationInVROriginSpace - *prevMotionControllerPosition).Size()) / DeltaTime;
-	*prevMotionControllerPosition = MotionControllerLocationInVROriginSpace;//Update the previous motion controller position
-	return res;
+	if (!ObstacleSensor)
+	{
+		outHit = false;
+		return nullptr;
+	}
+	
+	bool hit = ObstacleSensor->IsHit();
+	if (hit)
+	{
+		outHit = hit;
+		outHitResult = ObstacleSensor->GetHit();
+		return ObstacleSensor->GetHitActor();
+	}
+
+	outHit = false;
+	return nullptr;
 }
 
-void AVRCharacter::Move(const FVector& dir, float value)
+bool AVRCharacter::GetGroundHit(FHitResult& hit) const
+{
+	if (!GroundHitSensor) return false;
+	hit = GroundHitSensor->GetHit();
+	return GroundHitSensor->IsHit();
+}
+
+void AVRCharacter::Move(const FVector& dir, float value, bool instant)
 {
 	if (!PawnMovement) return;
-	AddMovementInput(dir, value);
+	if (instant)
+	{
+		PawnMovement->Velocity = dir * value;
+	}
+	else
+	{
+		AddMovementInput(dir, value);
+	}
 }
 
 void AVRCharacter::StopMovement()
@@ -432,195 +602,43 @@ void AVRCharacter::Run()
 	PawnMovement->MaxSpeed = runSpeed;
 }
 
-void AVRCharacter::DetectGround()
-{
-	if (!CapsuleCollisionComponent) return;	
-	//Get the half height of the capsule. Must be recalculated cause we do recalibration according to the player height
-	const float HalfHeight = CapsuleCollisionComponent->GetScaledCapsuleHalfHeight();
-	//Get the Location of the Capsule Component in the World Space, it is the center of the Capsule and add Half of the Capsule to shift it up
-	const FVector Start = CapsuleCollisionComponent->GetComponentLocation() + FVector(0.f, 0.f, HalfHeight);
-	const float SphereRadius = 20.f;//Radius of the cast sphere
-	//End of the Trace. All the height of the Capsule + Some distance check threshold, 10 cm. For landscape curvatures
-	const FVector End = Start - FVector(0.f, 0.f, (HalfHeight * 2.f) + GroundDetectionThreshold);
-	//Perform trace
-	TArray<AActor*> IgnoreActors;
-	IgnoreActors.Add(this);
-	FHitResult HitResult;	
-	bool bHit = UKismetSystemLibrary::SphereTraceSingle(
-		this,
-		Start,
-		End,
-		SphereRadius,
-		UEngineTypes::ConvertToTraceType(ECC_WorldStatic),//Filter by ECC_WorldStatic, cause floor is the static mesh
-		false, 
-		IgnoreActors,
-		EDrawDebugTrace::None,
-		HitResult,
-		true,
-		FLinearColor::Red,
-		FLinearColor::Green,
-		1.f
-	);
-	//We hit the ground and Normal direction is within propriate angle
-	if (bHit && HitResult.bBlockingHit && HitResult.ImpactNormal.Z > 0.5f)
-	{
-		bIsGrounded = true;
-		CurrentGroundHit = HitResult;
-	}
-	else
-	{
-		bIsGrounded = false;
-	}
-}
-
-void AVRCharacter::ApplyGravity(float DeltaTime)
-{
-	//Turn off gravity so we will not fall down when we walk through the mesh by our legs
-	if (bCameraInAMesh) 
-	{
-		VerticalVelocity = 0.f;
-		return;
-	}
-
-	if (bIsGrounded)
-	{		
-		VerticalVelocity = -10.f;
-		//Update Z velocity
-		if (PawnMovement)
-		{
-			PawnMovement->Velocity.Z = VerticalVelocity;
-		}
-		//Get HalfHeight of the capsule component
-		const float ScaledHalfHeight = CapsuleCollisionComponent->GetScaledCapsuleHalfHeight();
-		//Calculate Bottom of the CapsuleComponent
-		const float CapsuleBottomZ = CapsuleCollisionComponent->GetComponentLocation().Z - ScaledHalfHeight;
-		//Calculate penetration depth
-		const float PenetrationDepth = CurrentGroundHit.ImpactPoint.Z - CapsuleBottomZ;
-		
-		if (!FMath::IsNearlyZero(PenetrationDepth))
-		{
-			//Calculate corect Actor Location
-			FVector CurrentLocation = GetActorLocation();
-			CurrentLocation.Z += PenetrationDepth;
-			//Turn off the physics detection, because we wil be stacked in the floor mesh
-			SetActorLocation(CurrentLocation, false, nullptr, ETeleportType::TeleportPhysics);
-		}
-	}
-	else
-	{
-		//Vertical velocity accumulation v = v + g * dt, where g = -9.8 m / sec^2 = -980 cm / sec^2
-		VerticalVelocity += GravityConstant * DeltaTime;
-		//Clamp Vertiacal velocity between terminal velocity and max fall velocity
-		VerticalVelocity = FMath::Clamp(VerticalVelocity, TerminalVelocity, MaxFallVelocity);
-		
-		if (PawnMovement)
-		{
-			PawnMovement->Velocity.Z = VerticalVelocity;//Set Velocity Directly
-		}
-	}
-}
-
-FVector AVRCharacter::AdjustInputForSlope(const FVector& InputVector) const
-{
-	//We are in Air no floor normals adjustment is required
-	if (!bIsGrounded)
-	{
-		return InputVector;
-	}
-	//We project the normal Input Vector on the plane using its normal (we get it from FHit GroundHit)
-	//Vprj = V - (N*V)*N
-	return FVector::VectorPlaneProject(InputVector, CurrentGroundHit.ImpactNormal).GetSafeNormal() * InputVector.Size();
-}
-
-bool AVRCharacter::CheckObstaclesInDirection(const FVector& NormDirection, float Distance, float halfHeightMultipl, FHitResult& OutHit)
-{
-	if (NormDirection.IsNearlyZero()) return false;
-	if (!CapsuleCollisionComponent) return false;
-	FVector Start = CapsuleCollisionComponent->GetComponentLocation();
-	FVector End = Start + (NormDirection * Distance);
-	TArray<AActor*> actorsToIgnore;
-	actorsToIgnore.Add(this);
-	const float radius = CapsuleCollisionComponent->GetScaledCapsuleRadius();
-	const float halfHeight = CapsuleCollisionComponent->GetScaledCapsuleHalfHeight() * halfHeightMultipl;
-	bool hit = UKismetSystemLibrary::CapsuleTraceSingle(this, Start, End, radius, halfHeight,
-		UEngineTypes::ConvertToTraceType(ECollisionChannel::ECC_WorldStatic),
-		false, actorsToIgnore, EDrawDebugTrace::None, OutHit, true, FColor::Orange, FColor::Blue, 1.f);
-	if (hit && OutHit.bBlockingHit)
-	{
-		return true;
-	}	
-	return false;
-}
-
-bool AVRCharacter::IsGrounded() const
-{
-	return bIsGrounded;
-}
-
-bool AVRCharacter::IsJumping(float jumpHeadThreshold) const
-{
-	if (!bIsGrounded) return false;
-	if (!CameraComponent) return false;
-	float currentHeight = CameraComponent->GetRelativeLocation().Z;
-	float delta = currentHeight - InitialPlayerHeight;
-	if (FMath::IsNearlyZero(delta)) return false;
-	if (delta > jumpHeadThreshold) return true;
-	return false;
-}
-
 FTransform AVRCharacter::GetActorTransform()
 {
 	return this->GetTransform();
 }
 
-void AVRCharacter::CheckCameraFade(float DeltaTime)
+UCameraFadeSensor* AVRCharacter::GetCameraFadeSensor() const
 {
-	if (!CameraComponent) return;
-	//Camera Location in the World Space
-	const FVector startEnd = CameraComponent->GetComponentLocation();	
-	TArray<AActor*> actorsToIgnore;
-	actorsToIgnore.Add(this);
-	FHitResult hitResult;
-	//We trace sphere from camera to camera, FadeCheckRadius - Radius of the Trace Sphere
-	bool bHit = UKismetSystemLibrary::SphereTraceSingle(
-	this, startEnd, startEnd, FadeCheckRadius, 
-		UEngineTypes::ConvertToTraceType(ECC_WorldStatic), false, actorsToIgnore, EDrawDebugTrace::None, hitResult, true);
-
-	float targetOpacity = 0.f;
-	FString cameraOutWarning = TEXT("");
-	if (bHit && hitResult.bBlockingHit)//Camera is in mesh
-	{
-		bCameraInAMesh = true;
-		//Calculate Penetration Depth
-		//Dist from impact point to the Camera
-		FVector ImactToCamera = CameraComponent->GetComponentLocation() - hitResult.ImpactPoint;
-		float PenetrationDepth = FadeCheckRadius - ImactToCamera.Size();
-		//Normalized fase distance. As we closer to 5 cm - it will give us 1 and totaly fade the camera
-		float SafeFadeDistance = (CameraFadeDistance > 0.1f) ? CameraFadeDistance : 5.0f;
-		targetOpacity = FMath::Clamp(PenetrationDepth / SafeFadeDistance, 0.f, 1.f);
-
-		if (targetOpacity > 0.3f)
-		{
-			cameraOutWarning = FString(TEXT("Please return back to the borders of the Tracking Space.")).ToUpper();
-			DrawMsg(cameraOutWarning);
-		}
-	}
-	else
-	{
-		bCameraInAMesh = false;
-	}
-	//Fade opacity interpolation
-	CurrentCameraFadeOpacity = FMath::FInterpTo(CurrentCameraFadeOpacity, targetOpacity, DeltaTime, 10.f);
+	return CameraFadeSensor;
 }
 
-void AVRCharacter::ApplyCameraFade()
+UGroundHitSensor* AVRCharacter::GetGroundHitSensor() const
+{
+	return GroundHitSensor;
+}
+
+bool AVRCharacter::IsGrounded() const
+{
+	if (GroundHitSensor)
+	{
+		return GroundHitSensor->IsHit();
+	}
+	return false;
+}
+
+void AVRCharacter::SetNewActorLocation(const FVector& worldLocation, bool sweep, FHitResult* outHit, ETeleportType teleType)
+{
+	this->SetActorLocation(worldLocation, sweep, outHit, teleType);
+}
+
+void AVRCharacter::ApplyCameraFade(float cameraFadeOpacity)
 {
 	if (!CameraFadeComponent || !FadeDynamicMaterial) return;
 	//Apply new opacity to the camera fade mesh via dynamic material instance
-	if (CurrentCameraFadeOpacity > 0.01f)
+	if (cameraFadeOpacity > 0.01f)
 	{
 		CameraFadeComponent->SetHiddenInGame(false);
-		FadeDynamicMaterial->SetScalarParameterValue("Opacity", CurrentCameraFadeOpacity);
+		FadeDynamicMaterial->SetScalarParameterValue("Opacity", cameraFadeOpacity);
 	}
 	else
 	{
@@ -636,16 +654,6 @@ void AVRCharacter::DrawMsg(const FString& msg)
 	{
 		GEngine->AddOnScreenDebugMessage(1, 5.f, FColor::Red, msg, true);
 	}
-}
-
-void AVRCharacter::CalculateCurrentVelocity(float DeltaTime)
-{
-	if (!CameraComponent || FMath::IsNearlyZero(DeltaTime)) return;
-	//World Camera Location
-	FVector CurrentCameraPosition = CameraComponent->GetComponentLocation();
-	//use V = ds / dt, where dt -> 0 - Instant Velocity
-	CurrentVelocity = (CurrentCameraPosition - PrevCameraPosition) / DeltaTime;
-	PrevCameraPosition = CurrentCameraPosition;
 }
 
 void AVRCharacter::UpdateCapsuleComponentPosition()
@@ -675,6 +683,21 @@ void AVRCharacter::ApplyRotationFromCameraToCapsule(float DeltaTime)
 	CapsuleCollisionComponent->SetRelativeRotation(SmoothedRot);
 }
 
+UObstacleSensor* AVRCharacter::GetObstacleSensor() const
+{
+	return ObstacleSensor;
+}
+
+UVelocitySensor* AVRCharacter::GetCameraVelocitySensor() const
+{
+	return CameraVelocitySensor;
+}
+
+UVelocitySensor* AVRCharacter::GetMotionControllerVelocitySensor(bool right) const
+{
+	return right ? RightMotionControllerVelocitySensor : LeftMotionControllerVelocitySensor;
+}
+
 bool AVRCharacter::IsCrouching(float* crouchDepth) const
 {
 	if (!CameraComponent) return false;
@@ -687,49 +710,6 @@ bool AVRCharacter::IsCrouching(float* crouchDepth) const
 		*crouchDepth = h;
 	}	
 	return h > CrouchThreshold;
-}
-
-bool AVRCharacter::IsSwiningArms(float DeltaTime)
-{
-	if (!RightMotionController || !LeftMotionController) return false;
-	//Get The Velocity of the right and left motion controller
-	float rightContrVelocity = GetMotionControllerSpeed(RightMotionController, &prevRightHandLocation, DeltaTime);
-	float leftContrVelocity = GetMotionControllerSpeed(LeftMotionController, &prevLeftHandLocation, DeltaTime);
-	if (rightContrVelocity > SwiningThreshold && leftContrVelocity > SwiningThreshold)
-		return true;
-	return false;
-}
-
-bool AVRCharacter::CheckObstacles(float obstacleDistDetection, float halfHeightMultipl, FHitResult& OutHit)
-{
-	//No need to check obstacles when we are not moving	
-	if (CurrentVelocity.IsNearlyZero()) return false;
-	if (!CapsuleCollisionComponent) return false;
-	//Camera in World Space
-	FVector start = CapsuleCollisionComponent->GetComponentLocation();
-	//Vector in direction of the Pawn Velocity from the Camera in a World space,
-	//We use the Instant Velocity of the Pawn in 3d Space to have an ability to check obstacles in all 360 directions
-	FVector end = start + CurrentVelocity.GetSafeNormal() * obstacleDistDetection;
-	TArray<AActor*> actorsToIgnore;
-	actorsToIgnore.Add(this);
-	FHitResult hit;
-	float halfHeight = CapsuleCollisionComponent->GetScaledCapsuleHalfHeight() * halfHeightMultipl;
-	bool bHit = UKismetSystemLibrary::CapsuleTraceSingle(this,
-		start,
-		end,
-		CapsuleCollisionComponent->GetScaledCapsuleRadius(),
-		halfHeight,
-		UEngineTypes::ConvertToTraceType(ECollisionChannel::ECC_WorldStatic),
-		false, actorsToIgnore, EDrawDebugTrace::None, hit, true,
-		FLinearColor::Red, FLinearColor::Green, 1.f);
-
-	if (bHit && hit.bBlockingHit)//We faced the odstacle
-	{
-		OutHit = hit;
-		return true;
-	}
-
-	return false;
 }
 
 #if WITH_EDITOR
@@ -754,6 +734,10 @@ void AVRCharacter::PostEditChangeProperty(FPropertyChangedEvent& PropertyChanged
 	{
 		ConfigureDecalSize(PlayerAnchorDecalComponent, PlayerAnchorZoneHeight, PlayerAnchorZoneRadius, true);
 	}
+	else if (propName == GET_MEMBER_NAME_CHECKED(AVRCharacter, PreviewLocomotionState) && LocomotionStateManager)
+	{
+		LocomotionStateManager->SwitchState(PreviewLocomotionState);
+	}
 }
 
 #endif
@@ -771,37 +755,87 @@ FString ConvertEnumToStr(uint8 state)
 	return FString("Unable to map to the Enum!");
 }
 
+FString ConvertGEnumToStr(uint8 state)
+{
+	EGravityState e = static_cast<EGravityState>(state);
+	switch (e)
+	{
+	case EGravityState::EGS_InAir:
+		return FString("In Air");
+	case EGravityState::EGS_Grounded:
+		return FString("Grounded");
+	case EGravityState::EGS_InMesh:
+		return FString("In Mesh");
+	case EGravityState::EGS_Climbing:
+		return FString("Climbing");
+	}
+	return FString("Unable to map to the Enum!");
+}
+
 void AVRCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	if (GEngine)
+	if (GEngine && EnableStateManagersDebug)
 	{
-		GEngine->AddOnScreenDebugMessage(1, 5.f, FColor::Red, FString::Printf(TEXT("Curr State: %s"), *ConvertEnumToStr(LocomotionStateManager->GetCurrentStateEnum())));		
+		GEngine->AddOnScreenDebugMessage(20, 3.f, FColor::Red, FString::Printf(TEXT("Curr Locomotion: %s"), *ConvertEnumToStr(LocomotionStateManager->GetCurrentStateEnum())));
+		GEngine->AddOnScreenDebugMessage(21, 3.f, FColor::Red, FString::Printf(TEXT("Prev Locomotion: %s"), *ConvertEnumToStr(LocomotionStateManager->GetPrevStateEnum())));
+
+		GEngine->AddOnScreenDebugMessage(22, 3.f, FColor::Green, FString::Printf(TEXT("Curr Gravity: %s"), *ConvertGEnumToStr(GravityStateManager->GetCurrentStateEnum())));
+		GEngine->AddOnScreenDebugMessage(23, 3.f, FColor::Green, FString::Printf(TEXT("Prev Gravity: %s"), *ConvertGEnumToStr(GravityStateManager->GetPrevStateEnum())));
 	}
-	CalculatePlayerHeight();
+	//Call one time after game started. Need for Bone Scale factor calculation
+	InitializeBodyMetrics();
 	//Controls Capsule Mesh Component Relations
 	RecalibrateCapsuleAndMeshComponent();
 	UpdateCapsuleComponentPosition();
 	ApplyRotationFromCameraToCapsule(DeltaTime);
-	//Physics Calculations
-	CalculateCurrentVelocity(DeltaTime);
-	DetectGround();
-	ApplyGravity(DeltaTime);
-	//Camera Fade
-	CheckCameraFade(DeltaTime);
-	ApplyCameraFade();
-	//IK Calculations
-	UVRCharacterAnimInstance* inst = GetCharAnimInstance();
-	if (inst)
+	//Call Sensors
+	float capsHalfHeight = CapsuleCollisionComponent->GetScaledCapsuleHalfHeight();
+	if (CameraFadeSensor)
 	{
-		//We require additional sensors for Elbows or some Math 
-		inst->CalculateElbowJointTarget(DeltaTime, false);
-		inst->CalculateSpineRotation(DeltaTime, false);
+		CameraFadeSensor->SetMaxScanDistance(capsHalfHeight * 2.f);
+		CameraFadeSensor->DoScan(DeltaTime);
+	}
+	if (GroundHitSensor && CapsuleCollisionComponent)
+	{
+		GroundHitSensor->UpdateCapsuleHalfHeight(capsHalfHeight);
+		GroundHitSensor->DoScan(DeltaTime);
+	}
+	if (CameraVelocitySensor)
+	{
+		CameraVelocitySensor->DoScan(DeltaTime);
+	}
+	if (LeftMotionControllerVelocitySensor)
+	{
+		LeftMotionControllerVelocitySensor->DoScan(DeltaTime);
+	}
+	if (RightMotionControllerVelocitySensor)
+	{
+		RightMotionControllerVelocitySensor->DoScan(DeltaTime);
+	}
+	if (ObstacleSensor)
+	{
+		ObstacleSensor->SetScanDirection(CameraVelocitySensor->GetVelocity());
+		ObstacleSensor->DoScan(DeltaTime);
 	}
 
+	//Physics Gravity Calculations
+	if (GravityStateManager)
+	{
+		GravityStateManager->OnTick(DeltaTime);
+	}		
 	if (LocomotionStateManager)
 	{
 		LocomotionStateManager->OnTick(DeltaTime);
 	}
 	
+	//IK Calculations
+	UVRCharacterAnimInstance* inst = GetCharAnimInstance();
+	if (inst)
+	{
+		//We require additional sensors for Elbows or some Math 
+		inst->CalculateElbowJointTarget(DeltaTime, EnableIkDebug);
+		inst->CalculateFootIKEffectors(this, DeltaTime, EnableIkDebug);
+		inst->CalculateSpineRotation(DeltaTime, EnableIkDebug);
+	}
 }

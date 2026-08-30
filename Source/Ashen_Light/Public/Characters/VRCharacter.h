@@ -4,8 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "Characters/CharacterBase.h"
-#include "../../Public/Enums.h"
-#include "../../Public/Interfaces/VRCharacterInterface.h"
+#include "Enums.h"
+#include "Interfaces/VRCharacterInterface.h"
 #include "VRCharacter.generated.h"
 /**
  * 
@@ -79,6 +79,19 @@ protected:
 	
 	UPROPERTY(EditDefaultsOnly, Category = "VR Camera Fade Material")
 	class UMaterialInterface* FadeMaterialBase;
+			
+	//---State Managers---
+
+	UPROPERTY(VisibleAnywhere)
+	class UStateManagerComponent* LocomotionStateManager;
+
+	UPROPERTY(VisibleAnywhere)
+	UStateManagerComponent* GravityStateManager;
+
+	UPROPERTY(VisibleAnywhere)
+	class UStateBlackboard* GlobalStateBlackboard;
+
+	//---State Components
 
 	UPROPERTY(VisibleAnywhere)
 	class UPhysicalMovementComponent* PhysicalMovementComponent;
@@ -87,14 +100,40 @@ protected:
 	class UTrackingSpaceMovementComponent* TrackingSpaceMovementComponent;
 
 	UPROPERTY(VisibleAnywhere)
-	class UStateManagerComponent* LocomotionStateManager;
+	class UGroundedStateComponent* GroundedStateComponent;
+
+	UPROPERTY(VisibleAnywhere)
+	class UInAirStateComponent* InAirStateComponent;
+
+	UPROPERTY(VisibleAnywhere)
+	class UInMeshStateComponent* InMeshStateComponent;
+
+	UPROPERTY(VisibleAnywhere)
+	class UClimbingStateComponent* ClimbingStateComponent;
+
+	//---Sensors---
+
+	UPROPERTY(VisibleAnywhere)
+	class UCameraFadeSensor* CameraFadeSensor;
+
+	UPROPERTY(VisibleAnywhere)
+	class UGroundHitSensor* GroundHitSensor;
+
+	UPROPERTY(VisibleAnywhere)
+	class UVelocitySensor* CameraVelocitySensor;
+
+	UPROPERTY(VisibleAnywhere)
+	UVelocitySensor* RightMotionControllerVelocitySensor;
+
+	UPROPERTY(VisibleAnywhere)
+	UVelocitySensor* LeftMotionControllerVelocitySensor;
+
+	UPROPERTY(VisibleAnywhere)
+	class UObstacleSensor* ObstacleSensor;
 
 #pragma endregion
 
 #pragma region UPROPERTIES
-
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion", meta = (DisplayName = "Swinging Threshold", ClampMin = "0.001", UIMin = "0.001"))
-	float SwiningThreshold = 40.f;
 
 	UPROPERTY(EditAnywhere, Category = "VR Locomotion", meta = (DisplayName = "Walk Speed"))
 	float walkSpeed = 200.f;
@@ -102,30 +141,44 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "VR Locomotion", meta = (DisplayName = "Run Speed"))
 	float runSpeed = 300.f;
 
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion", meta = (DisplayName = "Ground Detection Threshold", Tooltip = "Value that will be added to the end point of the Sphere Trace for Ground Detection"))
-	float GroundDetectionThreshold = 10.f;
-
 	UPROPERTY(EditAnywhere, Category = "VR Locomotion")
-	float CrouchThreshold = 10.f;
-
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion Gravity", meta = (DisplayName = "Gravity Constant g"))
-	float GravityConstant = -980.f; //cm / sec^2
-
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion Gravity", meta = (DisplayName = "Max Fall Velocity"))
-	float MaxFallVelocity = 2000.f; //cm / sec
-
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion Gravity", meta = (DisplayName = "Terminal Velocity"))
-	float TerminalVelocity = -4000.f; //cm / sec
+	float JumpWaitTimer = 5.f;
 	
-	UPROPERTY(EditAnywhere, Category = "VR Camera Fade", meta = (DisplayName = "Fade Chech Radius", ClampMin = "0.001", UIMin = "0.001"))
-	float FadeCheckRadius = 14.f;
-
-	UPROPERTY(EditAnywhere, Category = "VR Camera Fade", meta = (DisplayName = "Camera Fade Distance", ClampMin = "0.001", UIMin = "0.001"))
+	UPROPERTY(EditAnywhere, Category = "VR Locomotion Thresholds")
+	float CrouchThreshold = 10.f;
+				
+	UPROPERTY(EditAnywhere, Category = "VR Camera Fade", meta = ( ClampMin = "0.001", UIMin = "0.001"))
 	float CameraFadeDistance = 5.f;
+	
+	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Dead Zone Radius", ClampMin = "0.001", UIMin = "0.001"))
+	float DeadZoneRadius = 40.f;
 
-	UPROPERTY()
-	AActor* CurrentObstacle = nullptr;
+	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Dead Zone Height", ClampMin = "0.001", UIMin = "0.001"))
+	float DeadZoneHeight = 300.f;
 
+	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Active Zone Radius", ClampMin = "0.001", UIMin = "0.001"))
+	float ActiveZoneRadius = 120.f;
+
+	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Active Zone Height", ClampMin = "0.001", UIMin = "0.001"))
+	float ActiveZoneHeight = 300.f;
+
+	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Player Anchor Radius", ClampMin = "0.001", UIMin = "0.001"))
+	float PlayerAnchorZoneRadius = 60.f;
+
+	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Player Anchor Height", ClampMin = "0.001", UIMin = "0.001"))
+	float PlayerAnchorZoneHeight = 300.f;
+
+	UPROPERTY(EditAnywhere, Category = "VR Simulation", meta = (Tooltip = "Player height that will be used in Simulation"))
+	float PlayerPreviewHeight = 186.f;
+
+	UPROPERTY(EditAnywhere, Category = "VR Simulation")
+	ELocomotionSpace PreviewLocomotionState;
+
+	UPROPERTY(EditAnywhere, Category = "VR Simulation")
+	bool EnableIkDebug = false;
+
+	UPROPERTY(EditAnywhere, Category = "VR Simulation")
+	bool EnableStateManagersDebug = false;
 #pragma endregion
 
 #pragma region UFunctions
@@ -220,47 +273,10 @@ protected:
 	/// <param name="redraw">Redraw decal in force mode?</param>
 	void ConfigureDecalSize(UDecalComponent* decal, float thicknes, float r, bool redraw = false);
 	/// <summary>
-	/// Calculates speed of motion controller
-	/// </summary>
-	/// <param name="motionController">Pointer to the controller</param>
-	/// <param name="prevMotionControllerPosition">Pointer to the previous motion controller position</param>
-	/// <param name="DeltaTime">Time passed between two adjacent frames</param>
-	/// <returns>Instant velocity of the controller</returns>
-	float GetMotionControllerSpeed(UMotionControllerComponent* motionController, FVector* prevMotionControllerPosition, float DeltaTime) const;
-	/// <summary>
-	/// Traces sphere from the half of the capsule to the ground. The length of the trace is half of the capsule + threshold.
-	/// </summary>
-	void DetectGround();
-	/// <summary>
-	/// Applys gravity during each tick to the object
-	/// </summary>
-	/// <param name="DeltaTime">Time passed between two adjacent frames</param>
-	void ApplyGravity(float DeltaTime);
-	/// <summary>
-	/// Adjusts Movement direction using surface normals
-	/// </summary>
-	/// <param name="InputVector"></param>
-	/// <returns></returns>
-	FVector AdjustInputForSlope(FVector InputVector) const;
-	/// <summary>
-	/// Checks condition when we need to apply camera fade effect
-	/// </summary>
-	/// <param name="DeltaTime"></param>
-	void CheckCameraFade(float DeltaTime);
-	/// <summary>
-	/// Apply camera fade effect to the special fade plane
-	/// </summary>
-	void ApplyCameraFade();
-	/// <summary>
 	/// Adds message to the screen
 	/// </summary>
 	/// <param name="msg">Message to display</param>
 	void DrawMsg(const FString& msg);
-	/// <summary>
-	/// Calculates the velocity of the moving Pawn
-	/// </summary>
-	/// <param name="DeltaTime">Time passed between two adjacent frames</param>
-	void CalculateCurrentVelocity(float DeltaTime);
 	/// <summary>
 	/// Updates capsule component position according to the camera position in the Tracking Space
 	/// </summary>
@@ -302,28 +318,12 @@ public:
 	{
 		cameraHeadDelta = delta;
 	}
-
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Dead Zone Radius", ClampMin = "0.001", UIMin = "0.001"))
-	float DeadZoneRadius = 40.f;
-
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Dead Zone Height", ClampMin = "0.001", UIMin = "0.001"))
-	float DeadZoneHeight = 300.f;
-
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Active Zone Radius", ClampMin = "0.001", UIMin = "0.001"))
-	float ActiveZoneRadius = 120.f;
-
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Active Zone Height", ClampMin = "0.001", UIMin = "0.001"))
-	float ActiveZoneHeight = 300.f;
-
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Player Anchor Radius", ClampMin = "0.001", UIMin = "0.001"))
-	float PlayerAnchorZoneRadius = 60.f;
-
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Player Anchor Height", ClampMin = "0.001", UIMin = "0.001"))
-	float PlayerAnchorZoneHeight = 300.f;
+	
+	AActor* GetObstacle(bool& outHit, FHitResult& ouHitResult) const;
+	bool GetGroundHit(FHitResult& hit) const;
 
 #pragma region IStateDriven
-	virtual void Move(const FVector& dir, float value) override;
-
+	virtual void Move(const FVector& dir, float value, bool instant = false) override;
 	/// <summary>
 	/// Stops all the movement immediatly
 	/// </summary>
@@ -336,92 +336,62 @@ public:
 	/// Sets the Run speed to UPawnFloatingMovement
 	/// </summary>
 	virtual void Run() override;
-
 	virtual UCapsuleComponent* GetCapsuleComponent() const override
 	{
 		return CapsuleCollisionComponent;
 	}
-
-	virtual FVector GetCurrentVelocity() const override
-	{
-		return CurrentVelocity;
-	}
-
 	virtual UCameraComponent* GetVRCamera() const override
 	{
 		return CameraComponent;
 	}
-
 	virtual USkeletalMeshComponent* GetMesh() const override
 	{
 		return SkeletalMeshComponent;
 	}
-
 	virtual UMotionControllerComponent* GetLeftMotionController() const override
 	{
 		return LeftMotionController;
 	}
-
 	virtual UMotionControllerComponent* GetRightMotionController() const override
 	{
 		return RightMotionController;
 	}
-
+	virtual class UObstacleSensor* GetObstacleSensor() const override;
+	virtual class UVelocitySensor* GetCameraVelocitySensor() const override;
+	virtual UVelocitySensor* GetMotionControllerVelocitySensor(bool right) const override;
 	/// <summary>
 	/// Do we do crouching. Calculated by comparing the difference between the player height and current camera Z position.
 	/// </summary>
 	/// <param name="crouchDepth">Calculated depth of the crouch. Can be used in IK Calculation</param>
 	/// <returns></returns>
-	virtual bool IsCrouching(float* crouchDepth) const override;
-
+	virtual bool IsCrouching(float* crouchDepth) const;
 	virtual float GetDeadZoneRadius() const
 	{
 		return DeadZoneRadius;
 	}
-	/// <summary>
-	/// Calculates the Velocity of the right and left motion controllers, then compares them with a threshold
-	/// </summary>
-	/// <param name="DeltaTime">Time passed between two adjacent frames</param>
-	/// <returns>True - running, fals - walking</returns>
-	virtual bool IsSwiningArms(float DeltaTime) override;
-
-	virtual bool CheckObstacles(float obstacleDistDetection, float halfHeightMultipl, FHitResult& OutHit);
-
-	virtual FVector AdjustInputForSlope(const FVector& worldDir) const override;
-
-	virtual bool CheckObstaclesInDirection(const FVector& NormDirection, float obstacleDistDetection, float halfHeightMultipl, FHitResult& hit) override;
-
-	virtual bool IsGrounded() const override;
-
-	virtual bool IsJumping(float jumpHeadThreshold) const override;
-
 	virtual FTransform GetActorTransform() override;
-#pragma endregion
-
-
-#pragma region Public UPROPERTIES
-	UPROPERTY(EditAnywhere, Category = "VR Simulation", meta = (Tooltip="Player height that will be used in Simulation"))
-	float PlayerPreviewHeight = 186.f;
-
-	//UPROPERTY(EditAnywhere, Category = "Adjustments Constants", meta = (DisplayName = "Mesh Offset", Tooltip = "Offset for camera. We cannot manualy edit camera location, cause it is controlled by HMD. But we can shift mesh back in X Axis. Also it is used to adjust IK Camera Position"))
-	//FVector MeshOffset = FVector(0.f, 0.f, 0.f);
+	virtual class UCameraFadeSensor* GetCameraFadeSensor() const override;
+	bool IsClimbing() const override { return false; } //TO DO
+	virtual class UGroundHitSensor* GetGroundHitSensor() const override;
+	bool IsGrounded() const override;
+	virtual void SetNewActorLocation(const FVector& worldLocation, bool sweep, FHitResult* outHit, ETeleportType teleType) override;
+	virtual float GetInitPlayerHeight() const
+	{
+		return InitialPlayerHeight;
+	}
+	/// <summary>
+	/// Apply camera fade effect to the special fade plane
+	/// </summary>
+	void ApplyCameraFade(float cameraFadeOpacity);
+	bool IsJumping() const;
 #pragma endregion
 
 private:
-	FVector prevLeftHandLocation;//Left Hand Location in Tracking Space calculated in the previous frame
-	FVector prevRightHandLocation;//Right Hand Location in Tracking Space calculated in the previous frame
-	bool bIsObstacleHit;//Do we hit some Static or Dynamic Mesh?
-	bool bIsGrounded;//Do we stay on a ground
-	FHitResult CurrentGroundHit;//Hit of the ground
-	FHitResult CurrentObstacleHit;//Hit of the obstacle
-	float VerticalVelocity = 0.f;//Velocity applied to the Pawn in -Z direction
-	bool bCameraInAMesh;//Has camera entered the mesh?
-	float cameraHeadDelta;//Delta between Camera Z coordinate and head bone Z coordinate. we use half of it to place Mesh correctly	
-	FVector CurrentVelocity;
-	FVector PrevCameraPosition;//Camera Location in the Tracking Space calculated in the previous frame
+	float cameraHeadDelta;//Delta between Camera Z coordinate and head bone Z coordinate. we use half of it to place Mesh correctly		
 	float InitialPlayerHeight;//Height of the player that was calculated during the first start of the game
-	float CurrentCameraFadeOpacity;
 	UVRCharacterAnimInstance* VRCharacterAnimInstance;
-	bool initialPlayerHeightCalculated;
-	void CalculatePlayerHeight();
+	bool initialPlayerMetricsCalculated;
+	void InitializeBodyMetrics();
+	UPROPERTY()
+	TArray<AActor*> m_ActorsToIgnore;
 };

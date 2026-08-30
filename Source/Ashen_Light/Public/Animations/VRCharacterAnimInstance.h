@@ -96,6 +96,10 @@ public:
 	/// <param name="DeltaTime"></param>
 	/// <param name="debug"></param>
 	void CalculateSpineRotation(float DeltaTime, bool debug = false);
+
+	void CalculateFootIKEffectors(AActor* current, float DeltaTime, bool debug = false);
+
+	void CalculateFootHeight();
 protected:
 	class AVRCharacter* Self;
 	class UCameraComponent* CameraComponent;
@@ -197,11 +201,23 @@ protected:
 	float HeadIKInterpolationConstant = 5.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR LEG IK")
-	FString RightFootBoneName = FString("foot_r");
+	float LegIKInterpolationConstant = 3.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR LEG IK")
-	FString LeftFootBoneName = FString("foot_l");
+	float LayerBlendInterpolationConstant = 0.5f;
 
+	UPROPERTY(EditDefaultsOnly, Category = "VR LEG IK | Right")
+	FString RightFootBoneSocketName = FString("foot_rSocket");
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR LEG IK | Left")
+	FString LeftFootBoneSocketName = FString("foot_lSocket");
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR LEG IK")
+	float FloorDetectionThreshold = 10.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR LEG IK")
+	FString BallSocketName = FString("ball_Socket");
+	
 	UPROPERTY(EditDefaultsOnly, Category = "VR SPINE IK")
 	FString Spine03SocketName = FString("spine_03_s");
 
@@ -242,10 +258,16 @@ protected:
 	float Spine01Rot;
 
 	UPROPERTY(BlueprintReadOnly)
-	FVector RightFootIKEffector;
+	float LegIkEnable;
 
 	UPROPERTY(BlueprintReadOnly)
-	FVector LeftFootIKEffector;
+	float EnableLayerBlendForLegs;
+
+	UPROPERTY(BlueprintReadOnly)
+	FVector LeftFootEffectorLocation;
+
+	UPROPERTY(BlueprintReadOnly)
+	FVector RightFootEffectorLocation;
 
 	UFUNCTION(BlueprintPure)
 	bool IsGrounded() const;
@@ -322,6 +344,9 @@ private:
 	/// <param name="rigth">True for right</param>
 	/// <param name="deltaTime"></param>
 	void CalculateElbowJointTarget(bool rigth, float deltaTime, bool debug = false);
+
+	void CalculateFootIKEffector(AActor* currentActor, bool right, float DeltaTime, bool debug);
+
 	/// <summary>
 	/// Calculates Spine Rotation of spine_01, spine_02, spine_03 according to weights
 	/// </summary>
@@ -329,6 +354,10 @@ private:
 	/// <param name="deltaTime"></param>
 	/// <param name="debug"></param>
 	void CalculateSpineRotationAccordingToTheControllerLocation(bool right, float deltaTime, bool debug = false);
+
+	void CalculateLegIkEnable(float DeltaTime);
+
+	void CalculateLayerBlendForLegs(float DeltaTime);
 #pragma region State
 	bool m_Initialized;//Do we perform initialization of the blueprint
 	/// IK Distances
@@ -342,6 +371,7 @@ private:
 	bool bIsLeftGripPressed = false;
 	bool bIsLeftTriggerPressed = false;
 	float CameraHeadDelta = 0.f;
+	float footHeight;
 #pragma endregion
 
 };

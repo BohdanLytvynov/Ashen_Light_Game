@@ -1,12 +1,16 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "Components/VRCharacter/TrackingSpaceMovementComponent.h"
+#include "Components/VRCharacter/Movement/TrackingSpaceMovementComponent.h"
 #include "Camera/CameraComponent.h"
-#include "../../../Public/Characters/VRCharacter.h"
+#include "Characters/VRCharacter.h"
 #include "Components/CapsuleComponent.h"
-#include "../../../Public/Components/StateManagerComponent.h"
-#include "../../../Public/Enums.h"
+#include "Components/Base/StateManagerComponent.h"
+#include "Components/VRCharacter/Sensors/GroundHitSensor.h"
+#include "Components/Base/VelocitySensor.h"
+#include "Components/VRCharacter/Sensors/ObstacleSensor.h"
+#include "Components/VRCharacter/Sensors/CameraFadeSensor.h"
+#include "Enums.h"
 
 UTrackingSpaceMovementComponent::UTrackingSpaceMovementComponent(const FObjectInitializer& init) : Super(init)
 {
@@ -25,7 +29,12 @@ void UTrackingSpaceMovementComponent::HandleMovement(float DeltaTime)
 	if (!vrChar) return;
 	UCameraComponent* camera = vrChar->GetVRCamera();
 	if (!camera) return;
+	UGroundHitSensor* groundHitSensor = vrChar->GetGroundHitSensor();
 	if (!vrChar->IsGrounded()) return;//No need to calculate the movement when we are in air
+	UCameraFadeSensor* camFadeSensor = vrChar->GetCameraFadeSensor();
+	if (!camFadeSensor) return;
+	//No movement, if we are inside the Mesh
+	if (camFadeSensor->IsHit()) return;
 	//1 Get HMD Device coordinates in TrackSpace relative to the TrackSpace's origin
 	FVector CameraInTrackSpace = camera->GetRelativeLocation();
 	//2 Create the 2D vector 
@@ -38,8 +47,7 @@ void UTrackingSpaceMovementComponent::HandleMovement(float DeltaTime)
 		//Transform HMD location in the Track Space to Unreal Engine World Space
 		FVector WorldDirVector = actorWorld.TransformVectorNoScale(CameraInTrackSpace2D);
 		FHitResult hit;
-		
-		if (vrChar->CheckObstacles(ObstacleDistanceDetection, TraceCapsuleHalfHeightMultipl, hit))//We hit obstacle
+		if (CheckObstacles(vrChar, hit))//We hit obstacle
 		{		
 			//Normal that is perpendicular to the Mesh Face
 			FVector ImpactNormal = hit.ImpactNormal;
@@ -60,9 +68,8 @@ void UTrackingSpaceMovementComponent::HandleMovement(float DeltaTime)
 			{
 				//Calculate vector along the Static Mesh to slide across
 				WorldDirVector = FVector::VectorPlaneProject(MovementDir, ImpactNormal);
-				FVector NormDirVector = WorldDirVector.GetSafeNormal();
 				FHitResult secondHit;
-				if (vrChar->CheckObstaclesInDirection(NormDirVector, ObstacleDistanceDetection, TraceCapsuleHalfHeightMultipl, secondHit))
+				if (CheckObstaclesInDirection(vrChar, WorldDirVector, secondHit))
 				{
 					WorldDirVector = FVector::ZeroVector;
 				}
@@ -71,7 +78,7 @@ void UTrackingSpaceMovementComponent::HandleMovement(float DeltaTime)
 
 		if (!WorldDirVector.IsNearlyZero())
 		{
-			if (vrChar->IsSwiningArms(DeltaTime))//Run
+			if (IsSwiningArms(vrChar))//Run
 			{
 				vrChar->Run();
 			}
@@ -80,7 +87,7 @@ void UTrackingSpaceMovementComponent::HandleMovement(float DeltaTime)
 				vrChar->Walk();
 			}
 			//Modify direction vector to slide across the floor normals
-			FVector SlopeAdjustedWorldDirVector = vrChar->AdjustInputForSlope(WorldDirVector);
+			FVector SlopeAdjustedWorldDirVector = AdjustInputForSlope(vrChar, WorldDirVector);
 			//Call movement via UPawnFloatingMovement
 			vrChar->Move(SlopeAdjustedWorldDirVector.GetSafeNormal(), 1.f);
 		}
@@ -95,8 +102,46 @@ void UTrackingSpaceMovementComponent::HandleJump(float DeltaTime)
 {
 	IVRCharacterInterface* vrChar = GetContext();
 	if (!vrChar) return;
-	if (vrChar->IsJumping(JumpThreshold))//We get the gesture for jump (B + Extreme change in height)
-	{
 
-	}
+}
+
+bool UTrackingSpaceMovementComponent::IsSwiningArms(IVRCharacterInterface* vrChar)
+{
+	if (!vrChar) return false;
+	UVelocitySensor* rightHandSensor = vrChar->GetMotionControllerVelocitySensor(true);
+	if (!rightHandSensor) return false;
+	UVelocitySensor* leftHandSensor = vrChar->GetMotionControllerVelocitySensor(false);
+	if (!leftHandSensor) return false;
+	float rightContrVelocity = rightHandSensor->GetVelocity().Size();
+	float leftContrVelocity = leftHandSensor->GetVelocity().Size();
+	return rightContrVelocity > SwiningThreshold && leftContrVelocity > SwiningThreshold;
+}
+
+bool UTrackingSpaceMovementComponent::CheckObstacles(IVRCharacterInterface* vrChar, FHitResult& outRes)
+{
+	if (!vrChar) return false;
+	UObstacleSensor* sensor = vrChar->GetObstacleSensor();
+	if (!sensor) return false;
+	outRes = sensor->GetHit();
+	return sensor->IsHit();
+}
+
+bool UTrackingSpaceMovementComponent::CheckObstaclesInDirection(IVRCharacterInterface* vrChar, FVector normDir, FHitResult& outRes)
+{
+	if (!vrChar) return false;
+	UObstacleSensor* sensor = vrChar->GetObstacleSensor();
+	if (!sensor) return false;
+	sensor->SetScanDirection(normDir);
+	sensor->DoScan(1.f);
+	outRes = sensor->GetHit();
+	return sensor->IsHit();
+}
+
+FVector UTrackingSpaceMovementComponent::AdjustInputForSlope(IVRCharacterInterface* vrChar, const FVector& input)
+{
+	if (!vrChar) return input;
+	UGroundHitSensor* groundHitSensor = vrChar->GetGroundHitSensor();
+	if (!groundHitSensor) return input;
+	if (!groundHitSensor->IsHit()) return input;
+	return FVector::VectorPlaneProject(input, groundHitSensor->GetHit().ImpactNormal).GetSafeNormal() * input.Size();
 }

@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
-#include "../../Public/Interfaces/StateDriven.h"
+#include "Interfaces/StateDriven.h"
 #include "StateComponentBase.generated.h"
 
 
@@ -18,9 +18,12 @@ public:
 	UStateComponentBase(const FObjectInitializer& init);
 
 	virtual void InitializeState(uint8 stateEnum, IStateDriven* stateDriven, class UStateManagerComponent* stateManager);
+	template<class Enum>
+	void InitializeState(Enum stateEnum, IStateDriven* stateDriven, UStateManagerComponent* stateManager);
 	virtual void OnStateEnter() {}
 	virtual void OnStateExit() {}
 	virtual void OnStateTick(float DeltaTime) {}
+	virtual void BeginPlay() {}
 
 	FORCEINLINE uint8 GetStateEnum() const
 	{
@@ -32,13 +35,17 @@ public:
 		return m_Context;
 	}
 
-	FORCEINLINE UStateManagerComponent* GetStateManager()
-	{
-		return m_StateManagerComponent;
-	}
+	virtual UStateManagerComponent* GetStateManager() const;
 
 private:
 	uint8 m_StateEnum;//Type of the current State
 	IStateDriven* m_Context;//Context Object, to have an access to.
 	UStateManagerComponent* m_StateManagerComponent;//Reference to the State Manager Component
 };
+
+template<class Enum>
+inline void UStateComponentBase::InitializeState(Enum stateEnum, IStateDriven* stateDriven, UStateManagerComponent* stateManager)
+{
+	uint8 e = static_cast<uint8>(stateEnum);
+	InitializeState(e, stateDriven, stateManager);
+}
