@@ -16,17 +16,21 @@ public:
 	// Sets default values for this component's properties
 	USensorBase(const FObjectInitializer& init);
 
-	virtual void DoScan(TArray<AActor*> ignoredActors) {}
-	virtual void UpdateSensorPosition(const FVector& pos);
-protected:
-	FORCEINLINE FVector GetPosition()
+	virtual void DoScan(float DeltaTime) {}
+	FORCEINLINE void SetTrackingComponent(USceneComponent* component)
 	{
-		return m_SensorPosition;
+		m_component = component;
 	}
-
+protected:	
 	UPROPERTY(EditAnywhere, Category = "Sensor Debug")
 	bool EnableDebug = false;
 
+	FORCEINLINE USceneComponent* GetTrackingComponent() const
+	{
+		return m_component;
+	}
+
+	virtual bool CanScan() const;
 private:
-	FVector m_SensorPosition;
+	USceneComponent* m_component;
 };

@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "RawCpp/RectMatrix.h"
-#include "StateBlackboardBase.h"
+#include "StateBlackboard.h"
 #include "StateManagerComponent.generated.h"
 
 UCLASS(NotBlueprintable)
@@ -14,9 +14,7 @@ class ASHEN_LIGHT_API UStateManagerComponent : public UObject
 	typedef void (*StateMatConfigDelegate) (FRectMatrix<bool>*);
 public:	
 	// Sets default values for this component's properties
-	UStateManagerComponent(const FObjectInitializer& init);
-	// Called every frame
-	
+	UStateManagerComponent(const FObjectInitializer& init);	
 	/// <summary>
 	/// Register the new state to the Map
 	/// </summary>
@@ -36,19 +34,27 @@ public:
 	/// </summary>
 	/// <param name="DeltaTime"></param>
 	void OnTick(float DeltaTime);
-	uint8 GetCurrentStateEnum();
+	virtual void BeginPlay();
+	uint8 GetCurrentStateEnum() const;
+	uint8 GetPrevStateEnum() const;
 	void BuildStateMatrix(int32 size);
 	void ConfigureStateMatrix(StateMatConfigDelegate config);
-	void Cleanup();
-	virtual FStateBlackboardBase* GetBlackboard();
+	UStateBlackboard* GetBlackboard();
+	UStateBlackboard* GetGlobalBlackboard()  const;
+	void AddGlobalBlackBoard(UStateBlackboard* globalBlackBoard);
 protected:
 	bool CanTransit(uint8 origState, uint8 destState) const;
+	template<class Enum>
+	bool CanTransit(Enum os, Enum ds) const;
+	UPROPERTY()//GC will handle this
+	UStateBlackboard* StateBlackBoard;
+	UPROPERTY();
+	UStateBlackboard* GlobalBlackBoard;
 private:
 	TMap<uint8, UStateComponentBase*> m_EnumStateMap;
 	UStateComponentBase* CurrentState;
+	uint8 PrevState;
 	FRectMatrix<bool> StateMatrix;
-	FStateBlackboardBase* StateBlackBoard;
-	bool StateBlackBoardInitialized;
 };
 
 template<class Enum>
@@ -56,4 +62,12 @@ inline void UStateManagerComponent::SwitchState(Enum state)
 {
 	const uint8 e = static_cast<uint8>(state);
 	SwitchState(e);
+}
+
+template<class Enum>
+inline bool UStateManagerComponent::CanTransit(Enum os, Enum ds) const
+{
+	uint8 origState = static_cast<uint8>(os);
+	uint8 destState = static_cast<uint8>(ds);
+	return CanTransit(origState, destState);
 }

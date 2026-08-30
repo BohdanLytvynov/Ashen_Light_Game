@@ -23,6 +23,7 @@ public:
 	virtual void OnStateEnter() {}
 	virtual void OnStateExit() {}
 	virtual void OnStateTick(float DeltaTime) {}
+	virtual void BeginPlay() {}
 
 	FORCEINLINE uint8 GetStateEnum() const
 	{
@@ -34,7 +35,7 @@ public:
 		return m_Context;
 	}
 
-	virtual UStateManagerComponent* GetStateManager();
+	virtual UStateManagerComponent* GetStateManager() const;
 
 private:
 	uint8 m_StateEnum;//Type of the current State

@@ -16,10 +16,15 @@ class ASHEN_LIGHT_API UCameraFadeSensor : public UHitSensor
 public:	
 	// Sets default values for this component's properties
 	UCameraFadeSensor(const FObjectInitializer& init);
-	virtual void DoScan(TArray<AActor*> ignoredActors) override;
+	virtual void DoScan(float DeltaTime) override;
 	FORCEINLINE void SetMaxScanDistance(float maxDistance)
 	{
 		m_MaxScanDistance = maxDistance;
+	}
+
+	FORCEINLINE float GetFadeCheckRadius() const
+	{
+		return FadeCheckRadius;
 	}
 protected:
 
@@ -31,6 +36,4 @@ protected:
 
 private:
 	float m_MaxScanDistance;
-
-
 };

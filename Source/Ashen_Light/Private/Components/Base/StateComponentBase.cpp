@@ -19,7 +19,7 @@ void UStateComponentBase::InitializeState(uint8 stateEnum, IStateDriven* stateDr
 	m_StateManagerComponent = stateManager;
 }
 
-UStateManagerComponent* UStateComponentBase::GetStateManager()
+UStateManagerComponent* UStateComponentBase::GetStateManager() const
 {
 	return m_StateManagerComponent;
 }

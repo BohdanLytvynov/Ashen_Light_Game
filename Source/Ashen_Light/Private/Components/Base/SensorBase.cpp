@@ -9,12 +9,11 @@ USensorBase::USensorBase(const FObjectInitializer& init) : Super(init)
 	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
 	// off to improve performance if you don't need them.
 	PrimaryComponentTick.bCanEverTick = false;
-
 	// ...
 }
 
-void USensorBase::UpdateSensorPosition(const FVector& pos)
+bool USensorBase::CanScan() const
 {
-	m_SensorPosition = pos;
+	return 	m_component != nullptr;
 }
 

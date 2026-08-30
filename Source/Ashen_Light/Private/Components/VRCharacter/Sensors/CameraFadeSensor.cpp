@@ -9,26 +9,17 @@ UCameraFadeSensor::UCameraFadeSensor(const FObjectInitializer& init) : Super(ini
 {
 }
 
-void UCameraFadeSensor::DoScan(TArray<AActor*> ignoredActors)
+void UCameraFadeSensor::DoScan(float DeltaTime)
 {
+	if (!CanScan()) return;
 	UWorld* w = GetWorld();
 	if (!w) return;
-	FVector start = GetPosition();
-	FVector end = start - FVector(0.f, 0.f ,m_MaxScanDistance * FadeCheckDistanceRatio);
-	FCollisionQueryParams QueryParams;
-	QueryParams.AddIgnoredActors(ignoredActors);
-	QueryParams.bTraceComplex = false;
+	FVector start = GetTrackingComponent()->GetComponentLocation() + SensorOffset;
+	FVector end = start - FVector(0.f, 0.f, m_MaxScanDistance * FadeCheckDistanceRatio);
 	FHitResult outHit;
-	const bool bHit = w->SweepSingleByChannel(
-		outHit,
-		start,
-		end,
-		FQuat::Identity,
-		ECC_WorldStatic,
-		FCollisionShape::MakeSphere(FadeCheckRadius),
-		QueryParams
-	);
-
+	const bool bHit = DoScanInternal(w, outHit, start, end, 
+		FQuat::Identity, ECollisionChannel::ECC_WorldStatic, 
+		FCollisionShape::MakeSphere(FadeCheckRadius), false, ActorsToIgnore);
 	if (bHit && outHit.bBlockingHit)
 	{
 		Hit = outHit;
@@ -39,15 +30,7 @@ void UCameraFadeSensor::DoScan(TArray<AActor*> ignoredActors)
 		ObjectHit = false;
 	}
 
-	if (!EnableDebug) return;
-
-	if (ObjectHit)
-	{
-		DrawDebugSphere(w, outHit.ImpactPoint, FadeCheckRadius, 8, TraceHitColor, false, DebugDrawTime);
-	}
-	
-	DrawDebugSphere(w, start, FadeCheckRadius, 8, TraceColorStart, false, DebugDrawTime);
-	DrawDebugSphere(w, end, FadeCheckRadius, 8, TraceColorEnd, false, DebugDrawTime);
+	Debug(w, start, end, FadeCheckRadius);
 }
 
 

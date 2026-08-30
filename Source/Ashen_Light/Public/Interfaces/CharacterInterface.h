@@ -23,13 +23,10 @@ class ASHEN_LIGHT_API ICharacterInterface : public IStateDriven
 
 	// Add interface functions to this class. This is the class that will be inherited to implement this interface.
 public:
-	virtual bool IsGrounded() const = 0;
 	virtual void StopMovement() = 0;
 	virtual void Walk() = 0;
 	virtual void Run() = 0;
 	virtual void Move(const FVector& dir, float value, bool instant = false) = 0;
 	virtual class UCapsuleComponent* GetCapsuleComponent() const = 0;
-	virtual FVector GetCurrentVelocity() const = 0;
 	virtual class USkeletalMeshComponent* GetMesh() const = 0;
-	virtual FVector AdjustInputForSlope(const FVector& worldDir) const = 0;
 };

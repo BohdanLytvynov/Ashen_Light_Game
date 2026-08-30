@@ -6,7 +6,7 @@
 // Sets default values for this component's properties
 UStateManagerComponent::UStateManagerComponent(const FObjectInitializer& init) : Super(init)
 {
-	StateBlackBoardInitialized = false;
+	PrevState = 0.f;
 }
 
 void UStateManagerComponent::OnTick(float DeltaTime)
@@ -17,9 +17,14 @@ void UStateManagerComponent::OnTick(float DeltaTime)
 	}	
 }
 
-uint8 UStateManagerComponent::GetCurrentStateEnum()
+uint8 UStateManagerComponent::GetCurrentStateEnum() const
 {
 	return CurrentState->GetStateEnum();
+}
+
+uint8 UStateManagerComponent::GetPrevStateEnum() const
+{
+	return PrevState;
 }
 
 void UStateManagerComponent::BuildStateMatrix(int32 size)
@@ -41,14 +46,23 @@ bool UStateManagerComponent::CanTransit(uint8 origState, uint8 destState) const
 	return temp != nullptr ? *temp : false;
 }
 
-FStateBlackboardBase* UStateManagerComponent::GetBlackboard()
+UStateBlackboard* UStateManagerComponent::GetBlackboard()
 {
 	if (!StateBlackBoard)
 	{
-		StateBlackBoard = new FStateBlackboardBase();
-		StateBlackBoardInitialized = true;
+		StateBlackBoard = NewObject<UStateBlackboard>();
 	}
 	return StateBlackBoard;
+}
+
+UStateBlackboard* UStateManagerComponent::GetGlobalBlackboard() const
+{
+	return GlobalBlackBoard;
+}
+
+void UStateManagerComponent::AddGlobalBlackBoard(UStateBlackboard* globalBlackBoard)
+{
+	GlobalBlackBoard = globalBlackBoard;
 }
 
 void UStateManagerComponent::RegisterState(UStateComponentBase* state)
@@ -63,27 +77,28 @@ void UStateManagerComponent::SwitchState(uint8 state)
 {
 	auto pNewState = m_EnumStateMap.Find(state);
 	if (!pNewState || !(*pNewState)) return;
-
-	if (CurrentState)
-	{
-		if (!CanTransit((uint8)CurrentState->GetStateEnum(), state))
-			return;
-	}
-
-	if (CurrentState)
-	{
-		CurrentState->OnStateExit();
-	}
 	
+	if (CurrentState)
+	{
+		if (!CanTransit(CurrentState->GetStateEnum(), state))
+			return;
+		CurrentState->OnStateExit();
+		PrevState = CurrentState->GetStateEnum();
+	}
+
 	CurrentState = *pNewState;
-	CurrentState->OnStateEnter();
+
+	if (CurrentState)
+	{
+		CurrentState->OnStateEnter();
+	}
 }
 
-void UStateManagerComponent::Cleanup()
+void UStateManagerComponent::BeginPlay()
 {
-	if (StateBlackBoardInitialized)
+	for (auto k : m_EnumStateMap)
 	{
-		delete StateBlackBoard;
+		k.Value->BeginPlay();
 	}
 }
 

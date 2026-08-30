@@ -24,4 +24,5 @@ class ASHEN_LIGHT_API IStateDriven
 public:
 	//Gets Actor World Transform
 	virtual FTransform GetActorTransform() = 0;
+	virtual void SetNewActorLocation(const FVector& worldLocation, bool sweep, FHitResult* outHit, ETeleportType teleType) = 0;
 };
