@@ -23,8 +23,8 @@ class ASHEN_LIGHT_API IVRCharacterInterface : public ICharacterInterface
 
 	// Add interface functions to this class. This is the class that will be inherited to implement this interface.
 public:
-	virtual class UMotionControllerComponent* GetLeftMotionController() const = 0;
-	virtual class UMotionControllerComponent* GetRightMotionController() const = 0;
+	virtual class UMotionControllerComponent* GetMotionController(bool right) const = 0;	
+	virtual class UMotionControllerHitSensor* GetMotionControllerHitSensor(bool right) const = 0;
 	virtual class UCameraComponent* GetVRCamera() const = 0;
 	virtual class UCameraFadeSensor* GetCameraFadeSensor() const = 0;
 	virtual class UGroundHitSensor* GetGroundHitSensor() const = 0;

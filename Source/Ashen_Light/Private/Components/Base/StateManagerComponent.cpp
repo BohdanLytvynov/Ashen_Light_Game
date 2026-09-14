@@ -6,11 +6,18 @@
 // Sets default values for this component's properties
 UStateManagerComponent::UStateManagerComponent(const FObjectInitializer& init) : Super(init)
 {
-	PrevState = 0.f;
+	bAutoActivate = false;
+	PrimaryComponentTick.bCanEverTick = false;
+	PrevState = 0;
 }
 
 void UStateManagerComponent::OnTick(float DeltaTime)
 {
+	if (EnableDebug && m_EnumToStrConverter && CurrentMsgIndex >= 0 && PrevMsgIndex >= 0 && CurrentMsgIndex != PrevMsgIndex)
+	{
+		Debug();
+	}
+
 	if (CurrentState)
 	{
 		CurrentState->OnStateTick(DeltaTime);
@@ -44,6 +51,29 @@ bool UStateManagerComponent::CanTransit(uint8 origState, uint8 destState) const
 	if (StateMatrix.GetSize() == 0) return true;
 	const bool* temp = StateMatrix.Get(origState, destState);
 	return temp != nullptr ? *temp : false;
+}
+
+#if WITH_EDITOR
+
+void UStateManagerComponent::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	FName propName = PropertyChangedEvent.GetPropertyName();
+	if (propName.IsNone()) return;
+	if (propName == GET_MEMBER_NAME_CHECKED(UStateManagerComponent, DebugState))
+	{
+		SwitchState(DebugState);
+	}
+}
+
+#endif
+
+void UStateManagerComponent::Debug()
+{
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(CurrentMsgIndex, DisplayTime, DebugColor, FString::Printf(TEXT("Current <%s> State: %s "), *InternalName.ToString(), *m_EnumToStrConverter(GetCurrentStateEnum())));
+		GEngine->AddOnScreenDebugMessage(PrevMsgIndex, DisplayTime, DebugColor, FString::Printf(TEXT("Prev <%s> State: %s "), *InternalName.ToString(), *m_EnumToStrConverter(GetPrevStateEnum())));
+	}
 }
 
 UStateBlackboard* UStateManagerComponent::GetBlackboard()

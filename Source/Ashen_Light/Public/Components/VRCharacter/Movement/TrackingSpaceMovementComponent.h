@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "../Base/VRCharacterComponentBase.h"
+#include "Components/VRCharacter/Movement/VRCharacterMovementStateBase.h"
 #include "Interfaces/VRCharacterInterface.h"
 #include "TrackingSpaceMovementComponent.generated.h"
 
@@ -11,7 +11,7 @@
  * 
  */
 UCLASS()
-class ASHEN_LIGHT_API UTrackingSpaceMovementComponent : public UVRCharacterComponentBase
+class ASHEN_LIGHT_API UTrackingSpaceMovementComponent : public UVRCharacterMovementStateBase
 {
 	GENERATED_BODY()
 
@@ -27,7 +27,6 @@ protected:
 	float SwiningThreshold = 40.f;
 private:
 	void HandleMovement(float DeltaTime);
-	void HandleJump(float DeltaTime);
 	bool IsSwiningArms(IVRCharacterInterface* vrChar);
 	bool CheckObstacles(IVRCharacterInterface* vrChar, FHitResult& outRes);
 	bool CheckObstaclesInDirection(IVRCharacterInterface* vrChar, FVector normDir, FHitResult& outRes);

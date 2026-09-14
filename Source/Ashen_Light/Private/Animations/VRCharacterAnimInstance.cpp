@@ -7,6 +7,8 @@
 #include "MotionControllerComponent.h"
 #include "DrawDebugHelpers.h"
 #include "Components/CapsuleComponent.h"
+#include "Utilities/Sensors/SensorTraceUtility.h"
+#include <Components/Base/HitSensor.h>
 
 
 UVRCharacterAnimInstance::UVRCharacterAnimInstance(const FObjectInitializer& init) : Super(init)
@@ -29,9 +31,9 @@ void UVRCharacterAnimInstance::Initialize()
 		if (!Self) return;
 		//Init local pointers
 		CameraComponent = Self->GetVRCamera();
-		RightController = Self->GetRightMotionController();
-		LeftController = Self->GetLeftMotionController();
-		SkeletalMesh->HideBoneByName(FName(HeadName), EPhysBodyOp::PBO_None);
+		RightController = Self->GetMotionController(true);
+		LeftController = Self->GetMotionController(false);
+		SkeletalMesh->HideBoneByName(HeadName, EPhysBodyOp::PBO_None);
 		m_Initialized = true;
 		return;
 	}
@@ -51,7 +53,7 @@ bool UVRCharacterAnimInstance::IsInGameWorld()
 
 void UVRCharacterAnimInstance::GetCameraIKPositionForPreview()
 {	
-	FTransform headTransform = GetBoneTransform(FName(HeadName));
+	FTransform headTransform = GetBoneTransform(HeadName);
 	CameraIKTransform.SetRotation(headTransform.GetRotation());
 	CameraIKTransform.SetLocation(headTransform.GetLocation() + PreviewVRCameraLocation);
 	CameraIKTransform.SetScale3D(FVector::OneVector);
@@ -59,7 +61,7 @@ void UVRCharacterAnimInstance::GetCameraIKPositionForPreview()
 
 void UVRCharacterAnimInstance::GetLeftMotionControllerPositionForPreview()
 {
-	FTransform rightHandTransform = GetBoneTransform(FName(LeftLowerArmBoneName));
+	FTransform rightHandTransform = GetBoneTransform(LeftLowerArmBoneName);
 	RightMotionControllerIKTransform.SetRotation(rightHandTransform.GetRotation());
 	RightMotionControllerIKTransform.SetLocation(rightHandTransform.GetLocation() + RightMotionControllerLocation);
 	RightMotionControllerIKTransform.SetScale3D(FVector::OneVector);
@@ -67,7 +69,7 @@ void UVRCharacterAnimInstance::GetLeftMotionControllerPositionForPreview()
 
 void UVRCharacterAnimInstance::GetRightMotionControllerPositionForPreview()
 {
-	FTransform leftHandTransform = GetBoneTransform(FName(RightLowerArmBoneName));
+	FTransform leftHandTransform = GetBoneTransform(RightLowerArmBoneName);
 	LeftMotionControllerIKTransform.SetRotation(leftHandTransform.GetRotation());
 	LeftMotionControllerIKTransform.SetLocation(leftHandTransform.GetLocation() + LeftMotionControllerLocation);
 	LeftMotionControllerIKTransform.SetScale3D(FVector::OneVector);
@@ -93,7 +95,7 @@ void UVRCharacterAnimInstance::CalculateUniversalScaleFactor(float cameraLocatio
 	//Now we need reference skeleton. In the initial pose.
 	const FReferenceSkeleton& RefSkeleton = SkeletalMesh->SkeletalMesh->GetRefSkeleton();
 	//Get index of the Bone
-	int32 HeadIndex = RefSkeleton.FindBoneIndex(FName(HeadName));
+	int32 HeadIndex = RefSkeleton.FindBoneIndex(HeadName);
 	if (HeadIndex == INDEX_NONE) return;
 	FTransform RefHeadTransform = FTransform::Identity;
 	int32 CurrBoneIndex = HeadIndex;
@@ -117,37 +119,37 @@ void UVRCharacterAnimInstance::CalculateUniversalScaleFactor(float cameraLocatio
 	CalculateIKDistances();
 }
 
-void UVRCharacterAnimInstance::CalculateElbowJointTarget(float DeltaTime, bool debug)
+void UVRCharacterAnimInstance::CalculateElbowJointTarget(float DeltaTime)
 {
-	CalculateElbowJointTarget(true, DeltaTime, debug);
-	CalculateElbowJointTarget(false, DeltaTime, debug);
+	CalculateElbowJointTarget(true, DeltaTime);
+	CalculateElbowJointTarget(false, DeltaTime);
 }
 
-void UVRCharacterAnimInstance::CalculateSpineRotation(float DeltaTime, bool debug)
+void UVRCharacterAnimInstance::CalculateSpineRotation(float DeltaTime)
 {
-	CalculateSpineRotationAccordingToTheControllerLocation(true, DeltaTime, debug);
-	CalculateSpineRotationAccordingToTheControllerLocation(false, DeltaTime, debug);
+	CalculateSpineRotationAccordingToTheControllerLocation(true, DeltaTime);
+	CalculateSpineRotationAccordingToTheControllerLocation(false, DeltaTime);
 }
 
-void UVRCharacterAnimInstance::CalculateFootIKEffectors(AActor* current, float DeltaTime, bool debug)
+void UVRCharacterAnimInstance::CalculateFootIKEffectors(AActor* current, float DeltaTime)
 {
-	CalculateFootIKEffector(current, true, DeltaTime, debug);
-	CalculateFootIKEffector(current, false, DeltaTime, debug);
+	CalculateFootIKEffector(current, true, DeltaTime);
+	CalculateFootIKEffector(current, false, DeltaTime);
 }
 
 void UVRCharacterAnimInstance::CalculateFootHeight()
 {
 	if (!SkeletalMesh) return;
-	FVector start = SkeletalMesh->GetSocketLocation(FName(LeftFootBoneSocketName));
-	FVector end = SkeletalMesh->GetSocketLocation(FName(BallSocketName));
-	footHeight = FVector::Dist(start, end);
+	FVector start = SkeletalMesh->GetSocketLocation(RightFootBoneSocketName);
+	FVector end = SkeletalMesh->GetSocketLocation(RightBallSocketName);
+	footHeight = start.Z - end.Z;
 }
 
 float UVRCharacterAnimInstance::GetUniversalScaleFactorForPreview()
 {
 	//Here logic is simple we use value from the editor
 	if (!SkeletalMesh) return 1.0f;
-	FTransform headBoneTransform = GetBoneTransform(FName(HeadName));
+	FTransform headBoneTransform = GetBoneTransform(HeadName);
 	float headZ = headBoneTransform.GetLocation().Z;
 	if (FMath::IsNearlyZero(headZ))
 	{
@@ -179,33 +181,35 @@ void UVRCharacterAnimInstance::CalculateCrouching(float DeltaTime)
 void UVRCharacterAnimInstance::CalculateIKDistances()
 {
 	if (!SkeletalMesh) return;
-	FVector shoulderPos = SkeletalMesh->GetSocketTransform(FName(RightUpperArmSocketName), ERelativeTransformSpace::RTS_Component).GetLocation();
-	FVector elbowPos = SkeletalMesh->GetSocketTransform(FName(RightLowerArmSocketName), ERelativeTransformSpace::RTS_Component).GetLocation();
-	FVector wristPos = SkeletalMesh->GetSocketTransform(FName(RightHandSocketName), ERelativeTransformSpace::RTS_Component).GetLocation();
-
+	FVector shoulderPos = SkeletalMesh->GetSocketTransform(RightUpperArmSocketName, ERelativeTransformSpace::RTS_Component).GetLocation();
+	FVector elbowPos = SkeletalMesh->GetSocketTransform(RightLowerArmSocketName, ERelativeTransformSpace::RTS_Component).GetLocation();
+	FVector wristPos = SkeletalMesh->GetSocketTransform(RightHandSocketName, ERelativeTransformSpace::RTS_Component).GetLocation();
+	FVector midStart = SkeletalMesh->GetSocketTransform(LeftMiddleSocketName, ERelativeTransformSpace::RTS_Component).GetLocation();
+	FVector midEnd = SkeletalMesh->GetSocketTransform(LeftMiddleEndSocket, ERelativeTransformSpace::RTS_Component).GetLocation();
 	lowerArmLength = FVector::Distance(shoulderPos, elbowPos);
 	handLength = FVector::Distance(elbowPos, wristPos);
 	elbowJointTargetDistance = (lowerArmLength + handLength) * 0.5f;
+	middleFingerLength = FVector::Distance(midStart, midEnd) + middleDistantFalangLength;
 }
 
-void UVRCharacterAnimInstance::CalculateElbowJointTarget(bool right, float deltaTime, bool debug)
+void UVRCharacterAnimInstance::CalculateElbowJointTarget(bool right, float deltaTime)
 {
 	if (!SkeletalMesh) return;
 	UMotionControllerComponent* controller = right ? RightController : LeftController;
 	if (!controller) return;
 	//Get All required Sockets	
-	FString handSocket = right ? RightHandSocketName : LeftHandSocketName;
-	FString middleSocket = right ? RightMiddleSocketName : LeftMiddleSocketName;
-	FString indexSocket = right ? RightIndexSocketName : LeftIndexSocketName;
-	FString shoulderSocket = right ? RightUpperArmSocketName : LeftUpperArmSocketName;
-	FString elbowSocket = right ? RightLowerArmSocketName : LeftLowerArmSocketName;
+	FName handSocket = right ? RightHandSocketName : LeftHandSocketName;
+	FName middleSocket = right ? RightMiddleSocketName : LeftMiddleSocketName;
+	FName indexSocket = right ? RightIndexSocketName : LeftIndexSocketName;
+	FName shoulderSocket = right ? RightUpperArmSocketName : LeftUpperArmSocketName;
+	FName elbowSocket = right ? RightLowerArmSocketName : LeftLowerArmSocketName;
 	//Build Palm Plane
-	FVector middleToHand = (SkeletalMesh->GetSocketLocation(FName(middleSocket)) - SkeletalMesh->GetSocketLocation(FName(handSocket))).GetSafeNormal();
-	FVector middleToIndex = (SkeletalMesh->GetSocketLocation(FName(indexSocket)) - SkeletalMesh->GetSocketLocation(FName(handSocket))).GetSafeNormal();
+	FVector middleToHand = (SkeletalMesh->GetSocketLocation(middleSocket) - SkeletalMesh->GetSocketLocation(handSocket)).GetSafeNormal();
+	FVector middleToIndex = (SkeletalMesh->GetSocketLocation(indexSocket) - SkeletalMesh->GetSocketLocation(handSocket)).GetSafeNormal();
 	FVector planeNormal = FVector::CrossProduct(middleToHand, middleToIndex);
-	FVector handAxis = (SkeletalMesh->GetSocketLocation(FName(handSocket)) - SkeletalMesh->GetSocketLocation(FName(shoulderSocket))).GetSafeNormal();
-	FVector elbowLocation = SkeletalMesh->GetSocketLocation(FName(elbowSocket));
-	FVector referencedNormalPlane;	
+	FVector handAxis = (SkeletalMesh->GetSocketLocation(handSocket) - SkeletalMesh->GetSocketLocation(shoulderSocket)).GetSafeNormal();
+	FVector elbowLocation = SkeletalMesh->GetSocketLocation(elbowSocket);
+	FVector referencedNormalPlane;
 	if (right)
 	{
 		planeNormal *= -1.f;
@@ -223,9 +227,7 @@ void UVRCharacterAnimInstance::CalculateElbowJointTarget(bool right, float delta
 	FVector newElbowJointTargetLocal = skelMeshTransform.InverseTransformPosition(newElbowJointTarget);
 	if (right)
 	{
-		if (RightPalmPlaneNormal.IsNearlyZero())
-			RightPalmPlaneNormal = prjPlaneNormal;
-
+		RightPalmPlaneNormal = prjPlaneNormal;
 		referencedNormalPlane = RightPalmPlaneNormal;
 		//Always Clamp [-1 ; 1]
 		const float DotVal = FMath::Clamp(FVector::DotProduct(RightPalmPlaneNormal, prjPlaneNormal), -1.f, 1.f);
@@ -243,9 +245,7 @@ void UVRCharacterAnimInstance::CalculateElbowJointTarget(bool right, float delta
 	}
 	else
 	{
-		if (LeftPalmPlaneNormal.IsNearlyZero())
-			LeftPalmPlaneNormal = prjPlaneNormal;
-
+		LeftPalmPlaneNormal = prjPlaneNormal;
 		referencedNormalPlane = LeftPalmPlaneNormal;
 		//Always Clamp [-1 ; 1]
 		const float DotVal = FMath::Clamp(FVector::DotProduct(LeftPalmPlaneNormal, prjPlaneNormal), -1.f, 1.f);
@@ -262,7 +262,7 @@ void UVRCharacterAnimInstance::CalculateElbowJointTarget(bool right, float delta
 		}
 	}
 
-	if (!debug)	return;
+	if (!DebugElbowJointTarget)	return;
 	FVector controllerPos = controller->GetComponentLocation();
 	UWorld* w = GetWorld();
 	DrawDebugDirectionalArrow(w, controllerPos, controllerPos + handAxis * 60.f, 10.f, FColor::Orange);
@@ -285,12 +285,12 @@ void UVRCharacterAnimInstance::CalculateElbowJointTarget(bool right, float delta
 	}
 }
 
-void UVRCharacterAnimInstance::CalculateFootIKEffector(AActor* currentActor, bool right, float DeltaTime, bool debug)
+void UVRCharacterAnimInstance::CalculateFootIKEffector(AActor* currentActor, bool right, float DeltaTime)
 {
 	UWorld* w = GetWorld();
 	if (!SkeletalMesh || !Self || !w || !currentActor) return;
-	FString footSocket = right ? RightFootBoneSocketName : LeftFootBoneSocketName;
-	FVector wFootSocketPos = SkeletalMesh->GetSocketLocation(FName(footSocket));
+	FName footSocket = right ? RightFootBoneSocketName : LeftFootBoneSocketName;
+	FVector wFootSocketPos = SkeletalMesh->GetSocketLocation(footSocket);
 	UCapsuleComponent* caps = Self->GetCapsuleComponent();
 	if (!caps) return;
 	FVector wCaps = caps->GetComponentLocation();
@@ -319,7 +319,7 @@ void UVRCharacterAnimInstance::CalculateFootIKEffector(AActor* currentActor, boo
 			finalDelta = -(rawFloorDelta + crouchDepth);
 			if (isCrouching)
 			{
-				finalDelta += footHeight * 0.5f;
+				finalDelta += footHeight;
 			}
 		}
 		else
@@ -327,7 +327,7 @@ void UVRCharacterAnimInstance::CalculateFootIKEffector(AActor* currentActor, boo
 			finalDelta = rawFloorDelta + crouchDepth;
 			if (isCrouching)
 			{
-				finalDelta -= footHeight * 0.5f;
+				finalDelta -= footHeight;
 			}
 		}
 		
@@ -342,7 +342,7 @@ void UVRCharacterAnimInstance::CalculateFootIKEffector(AActor* currentActor, boo
 	{
 		LeftFootEffectorLocation = FMath::VInterpTo(LeftFootEffectorLocation, TargetEffector, DeltaTime, InterpSpeed);
 	}
-	if (!debug) return;
+	if (!DebugFootIKEffectors) return;
 	if (gHit)
 	{
 		DrawDebugSphere(w, outHit.ImpactPoint, 5.f, 8, FColor::Red);
@@ -352,13 +352,13 @@ void UVRCharacterAnimInstance::CalculateFootIKEffector(AActor* currentActor, boo
 	DrawDebugSphere(w, end, 5.f, 8, FColor::Green);
 }
 
-void UVRCharacterAnimInstance::CalculateSpineRotationAccordingToTheControllerLocation(bool right, float deltaTime, bool debug)
+void UVRCharacterAnimInstance::CalculateSpineRotationAccordingToTheControllerLocation(bool right, float deltaTime)
 {
 	if (!SkeletalMesh) return;
-	FString shoulderSocket = right ? RightUpperArmSocketName : LeftUpperArmSocketName;
+	FName shoulderSocket = right ? RightUpperArmSocketName : LeftUpperArmSocketName;
 	UMotionControllerComponent* controller = right ? RightController : LeftController;
 	if (!controller) return;
-	FVector shoulderPos = SkeletalMesh->GetSocketLocation(FName(shoulderSocket));
+	FVector shoulderPos = SkeletalMesh->GetSocketLocation(shoulderSocket);
 	//Calculate arm Vector
 	FVector armVector = controller->GetComponentLocation() - shoulderPos;
 	//Calculate current distance from shoulder to controller (dist squared)
@@ -400,7 +400,7 @@ void UVRCharacterAnimInstance::CalculateSpineRotationAccordingToTheControllerLoc
 	Spine02Rot = FMath::FInterpTo(Spine02Rot, targetRotAngle * Spine02BoneWeight, deltaTime, SpineIKInterpolationConstant);
 	Spine01Rot = FMath::FInterpTo(Spine01Rot, targetRotAngle * Spine01BoneWeight, deltaTime, SpineIKInterpolationConstant);
 	
-	if (!debug) return;
+	if (!DebugSpineRotation) return;
 	UWorld* w = GetWorld();
 	DrawDebugDirectionalArrow(w, controller->GetComponentLocation(),
 		controller->GetComponentLocation() + armAxis * 20.f, 10.f, FColor::Orange);
@@ -455,7 +455,6 @@ void UVRCharacterAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		//Don't compute the FTransforms of Bones and Sockets here use Pawn Tick for that
 		GetGroundVelocity();
 		GetCameraIKTransform();
-		GetMotionControllersIKTransform();
 		CalculateCrouching(DeltaSeconds);
 		CalculateLegIkEnable(DeltaSeconds);
 		CalculateLayerBlendForLegs(DeltaSeconds);
@@ -498,33 +497,85 @@ void UVRCharacterAnimInstance::GetGroundVelocity()
 	GroundVelocity = Self->GetGroundVelocityRatio();
 }
 
-void UVRCharacterAnimInstance::GetMotionControllersIKTransform()
-{
-	if (!SkeletalMesh) return;	
-	CalculateMotionControllerTransform(RightController, FRotator(90.f, 0.f, 180.f), RightMotionControllerIKTransform);
-	CalculateMotionControllerTransform(LeftController, FRotator(-90.f, 0.f, 180.f), LeftMotionControllerIKTransform);
-}
-
 void UVRCharacterAnimInstance::CalculateMotionControllerTransform(
-	UMotionControllerComponent* comp, 
-	const FRotator& rotationOffset, 
-	FTransform& motionControllerTransform )
+	UMotionControllerComponent* comp,
+	bool right, float DeltaTime)
 {
-	if (!comp) return;
+	if (!comp || !SkeletalMesh || !Self) return;
 
-	//World Location of the Skeletal Mesh Component
-	const FTransform MeshTransform = SkeletalMesh->GetComponentTransform();
-	//World Location of the Right Motion Controller
-	const FTransform ControllerWorldTransform = comp->GetComponentTransform();
-	//Transform of the motion controller in the Skeletal Mesh Space
-	FTransform RelativeController = ControllerWorldTransform.GetRelativeTransform(MeshTransform);
-	//Multiplication of the Quaternions will give us the new rotation
-	FQuat NewRotation = RelativeController.GetRotation() * rotationOffset.Quaternion();
-	//Update Location, Rotation, Scale must be (1 , 1, 1)
-	//This will be pined to the Effector Location
-	motionControllerTransform.SetLocation(RelativeController.GetLocation());
-	//Rotation will be used in Modify Bone Mode to rotate the wrist
-	motionControllerTransform.SetRotation(NewRotation);
-	motionControllerTransform.SetScale3D(FVector::OneVector);
+	FName elbowSocket = right ? RightLowerArmSocketName : LeftLowerArmSocketName;
+	if (elbowSocket.IsNone()) return;
+
+	const FVector elbowPos = SkeletalMesh->GetSocketLocation(elbowSocket);
+	const FVector motionContrPos = comp->GetComponentLocation();
+
+	UHitSensor* hitSensor = (UHitSensor*)Self->GetMotionControllerHitSensor(right);
+	FVector targetPushOutOffset = FVector::ZeroVector;
+	FHitResult objHit;
+
+	if (hitSensor)
+	{
+		const float SphereRadius = 10.0f;
+		float multipl = right ? RightObstacleSensorDistanceMultipl : LeftObstacleSensorDistanceMultipl;
+		FVector elbowToMotionContr = (motionContrPos - elbowPos) * multipl;
+		FVector end = elbowPos + elbowToMotionContr;
+
+		bool bHit = FSensorTraceUtility::PerformTraceWithSensorConfig(
+			hitSensor,
+			elbowPos,
+			end,
+			FQuat::Identity,
+			FCollisionShape::MakeSphere(SphereRadius),
+			false,
+			objHit,
+			DebugHandObstacleSensor
+		);
+
+		if (bHit && objHit.bBlockingHit)
+		{
+			FVector impactToMotionContr = motionContrPos - objHit.ImpactPoint;
+			float depthAlongNormal = FVector::DotProduct(impactToMotionContr, objHit.ImpactNormal);
+			if (depthAlongNormal < SphereRadius)
+			{
+				float pushDistance = SphereRadius - depthAlongNormal;
+				EVRControllerState currState = right ? RightMotionControllerAnimState : LeftMotionControllerAnimState;
+				if (currState == EVRControllerState::VRCS_Neutral)
+				{
+					pushDistance += middleFingerLength;
+				}
+				targetPushOutOffset = objHit.ImpactNormal * pushDistance;
+			}
+		}
+	}
+
+	// 1. Interpolate push-out offset
+	FVector& currentOffset = right ? RightHandPushOutOffset : LeftHandPushOutOffset;
+	currentOffset = FMath::VInterpTo(currentOffset, targetPushOutOffset, DeltaTime, PushOutInterpSpeed);
+		
+	// 3. Apply base transform + surface rotation together
+	FTransform& targetIKTransform = right ? RightMotionControllerIKTransform : LeftMotionControllerIKTransform;
+	CalculateDefaultMotionControllerIKTransform(comp, right, targetIKTransform, currentOffset);
 }
 
+void UVRCharacterAnimInstance::CalculateDefaultMotionControllerIKTransform(
+	UMotionControllerComponent* comp,
+	bool right,
+	FTransform& mcTransform,
+	const FVector& pushOutOffset)
+{
+	if (!SkeletalMesh || !comp) return;
+	//Get World Mesh Transform
+	const FTransform MeshTransform = SkeletalMesh->GetComponentTransform();
+	//Calculate final world location of the hand
+	FVector finalWorldLocation = comp->GetComponentLocation() + pushOutOffset;	
+	//Get current world rotation of the motion controller as a Q
+	FQuat worldRotation = comp->GetComponentTransform().GetRotation();
+	//Get default rotation offset for each Motion Controller
+	FQuat offsetRot = right ? RightHandRotOffset.Quaternion() : LeftHandRotOffset.Quaternion();
+	//Apply rotation offset
+	FQuat baseHandWorldRotation = worldRotation * offsetRot;
+	//Build final world transform
+	FTransform worldTransform(baseHandWorldRotation, finalWorldLocation, FVector::OneVector);
+	//Convert transform to the Skeletal Mesh origin
+	mcTransform = worldTransform.GetRelativeTransform(MeshTransform);
+}

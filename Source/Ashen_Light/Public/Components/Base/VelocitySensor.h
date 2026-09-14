@@ -23,7 +23,7 @@ public:
 		return m_Velocity;
 	}
 protected:
-	UPROPERTY(VisibleAnywhere, Category = "Sensor Debug")
+	UPROPERTY(EditAnywhere, Category = "Sensor Debug")
 	int32 MsgDebugIndex = 1;
 	UPROPERTY(EditAnywhere, Category = "Sensor Debug")
 	float MsgDebugDuration = 5.f;

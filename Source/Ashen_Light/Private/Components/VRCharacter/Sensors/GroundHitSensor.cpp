@@ -17,7 +17,7 @@ void UGroundHitSensor::DoScan(float DeltaTime)
 	FVector end = start - FVector(0.f, 0.f, (CapsuleHalfHeight * 2 + GroundDetectionThreshold));
 	TArray<FHitResult> outHits;
 	const bool hitAny = DoScanInternalMulti(w, outHits, start, end, FQuat::Identity, 
-		ECollisionChannel::ECC_WorldStatic, FCollisionShape::MakeSphere(GroundTraceSphere), false, ActorsToIgnore);
+		 FCollisionShape::MakeSphere(GroundTraceSphere), false);
 	ObjectHit = false;
 	if (hitAny)
 	{
@@ -31,18 +31,17 @@ void UGroundHitSensor::DoScan(float DeltaTime)
 			}
 		}
 	}
+	if (!EnableDebug) return;
 	Debug(w, start, end, GroundTraceSphere);
 }
 
-bool UGroundHitSensor::DoScanInternalMulti(UWorld* w, TArray<FHitResult>& outHit, const FVector& start, const FVector& end, const FQuat& quat, ECollisionChannel channel, const FCollisionShape& shape, bool traceComplex, const TArray<AActor*>* ignoredActors) const
+bool UGroundHitSensor::DoScanInternalMulti(UWorld* w, TArray<FHitResult>& outHit, const FVector& start, const FVector& end, const FQuat& quat, const FCollisionShape& shape, bool traceComplex) const
 {
 	if (!w) return false;
 	FCollisionQueryParams QueryParams;
-	if (ignoredActors && ignoredActors->Num() > 0)
-	{
-		QueryParams.AddIgnoredActors(*ignoredActors);
-	}
+	ConfigureCollisionQueryParams(QueryParams);
 	QueryParams.bTraceComplex = traceComplex;
-	return w->SweepMultiByChannel(outHit, start, end, quat, channel,
-		shape, QueryParams);
+	FCollisionObjectQueryParams CollisionObjectQueryParams;
+	ConfigureCollisionObjectQueryParams(CollisionObjectQueryParams);
+	return w->SweepMultiByObjectType(outHit, start, end, quat, CollisionObjectQueryParams, shape, QueryParams);
 }

@@ -12,7 +12,8 @@ UCLASS(Abstract, ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class ASHEN_LIGHT_API UHitSensor : public USensorBase
 {
 	GENERATED_BODY()
-
+	//We allow this class to have full access to this base sensor
+	friend class FSensorTraceUtility;
 public:
 	// Sets default values for this component's properties
 	UHitSensor(const FObjectInitializer& init);
@@ -67,12 +68,18 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Sensor Config")
 	FVector SensorOffset = FVector::ZeroVector;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sensor Config")
+	TArray<TEnumAsByte<EObjectTypeQuery>> CollisionChannels;
+
 	FHitResult Hit;
 	bool ObjectHit;
 
 	bool DoScanInternal(UWorld* w, FHitResult& outHit, const FVector& start, 
-		const FVector& end, const FQuat& quat, ECollisionChannel channel, 
-		const FCollisionShape& shape, bool traceComplex, const TArray<AActor*>* ignoredActors) const;
+		const FVector& end, const FQuat& quat, 
+		const FCollisionShape& shape, bool traceComplex) const;
+
+	FORCEINLINE void ConfigureCollisionQueryParams(FCollisionQueryParams& params) const;
+	FORCEINLINE void ConfigureCollisionObjectQueryParams(FCollisionObjectQueryParams& params) const;
 
 	virtual void Debug(UWorld* w, const FVector& start, const FVector& end, float traceShapeRadius) const;
 

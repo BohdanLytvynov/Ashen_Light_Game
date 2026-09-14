@@ -15,21 +15,18 @@ class ASHEN_LIGHT_API USensorBase : public UActorComponent
 public:	
 	// Sets default values for this component's properties
 	USensorBase(const FObjectInitializer& init);
-
 	virtual void DoScan(float DeltaTime) {}
-	FORCEINLINE void SetTrackingComponent(USceneComponent* component)
+	virtual void SetTrackingComponent(USceneComponent* component)
 	{
 		m_component = component;
 	}
-protected:	
-	UPROPERTY(EditAnywhere, Category = "Sensor Debug")
-	bool EnableDebug = false;
-
 	FORCEINLINE USceneComponent* GetTrackingComponent() const
 	{
 		return m_component;
 	}
-
+protected:
+	UPROPERTY(EditAnywhere, Category = "Sensor Debug")
+	bool EnableDebug = false;
 	virtual bool CanScan() const;
 private:
 	USceneComponent* m_component;

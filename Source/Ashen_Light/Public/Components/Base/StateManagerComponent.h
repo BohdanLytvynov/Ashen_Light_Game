@@ -5,10 +5,13 @@
 #include "CoreMinimal.h"
 #include "RawCpp/RectMatrix.h"
 #include "StateBlackboard.h"
+#include "Components/ActorComponent.h"
 #include "StateManagerComponent.generated.h"
 
-UCLASS(NotBlueprintable)
-class ASHEN_LIGHT_API UStateManagerComponent : public UObject
+typedef FString(*EnumToStrConverter)(uint8);
+
+UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent), DefaultToInstanced, Blueprintable)
+class ASHEN_LIGHT_API UStateManagerComponent : public UActorComponent
 {
 	GENERATED_BODY()
 	typedef void (*StateMatConfigDelegate) (FRectMatrix<bool>*);
@@ -42,19 +45,75 @@ public:
 	UStateBlackboard* GetBlackboard();
 	UStateBlackboard* GetGlobalBlackboard()  const;
 	void AddGlobalBlackBoard(UStateBlackboard* globalBlackBoard);
+	template<class Enum>
+	inline Enum GetPrevState()
+	{
+		const uint8 e = GetPrevStateEnum();
+		return static_cast<Enum>(e);
+	}
+	template<class Enum>
+	inline Enum GetCurrentState()
+	{
+		const uint8 e = GetCurrentStateEnum();
+		return static_cast<Enum>(e);
+	}
+		
+	FORCEINLINE void SetEnumToStrConverter(EnumToStrConverter conv)
+	{
+		if (!conv) return;
+		m_EnumToStrConverter = conv;
+	}
+	
 protected:
 	bool CanTransit(uint8 origState, uint8 destState) const;
+
 	template<class Enum>
 	bool CanTransit(Enum os, Enum ds) const;
 	UPROPERTY()//GC will handle this
 	UStateBlackboard* StateBlackBoard;
-	UPROPERTY();
+
+	UPROPERTY()
 	UStateBlackboard* GlobalBlackBoard;
+
+	UPROPERTY(EditAnywhere, Category = "State Manager Debug")
+	bool EnableDebug = false;
+
+	UPROPERTY(EditAnywhere, Category = "State Manager Debug")
+	FName InternalName = FName("My State manager");
+
+	UPROPERTY(EditAnywhere, Category = "State Manager Debug")
+	int32 CurrentMsgIndex;
+
+	UPROPERTY(EditAnywhere, Category = "State Manager Debug")
+	int32 PrevMsgIndex;
+
+	UPROPERTY(EditAnywhere, Category = "State Manager Debug")
+	FColor DebugColor = FColor::Green;
+
+	UPROPERTY(EditAnywhere, Category = "State Manager Debug")
+	float DisplayTime = 0.7f;
+
+	UPROPERTY(EditAnywhere, Category = "State Manager Debug")
+	uint8 DebugState;
+
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
+
 private:
+	UPROPERTY()
 	TMap<uint8, UStateComponentBase*> m_EnumStateMap;
+
+	UPROPERTY()
 	UStateComponentBase* CurrentState;
+
 	uint8 PrevState;
+
 	FRectMatrix<bool> StateMatrix;
+
+	EnumToStrConverter m_EnumToStrConverter;
+
+	void Debug();
 };
 
 template<class Enum>

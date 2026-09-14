@@ -3,32 +3,52 @@
 
 #include "Components/Base/HitSensor.h"
 #include "DrawDebugHelpers.h"
+#include "Utilities/Sensors/SensorTraceUtility.h"
 
 // Sets default values for this component's properties
 UHitSensor::UHitSensor(const FObjectInitializer& init) : Super(init)
 {
 	ObjectHit = false;
+	CollisionChannels.Add(UEngineTypes::ConvertToObjectType(ECollisionChannel::ECC_WorldStatic));
 }
 
 bool UHitSensor::DoScanInternal(UWorld* w, FHitResult& outHit, 
 	const FVector& start, const FVector& end, 
-	const FQuat& quat, ECollisionChannel channel, 
-	const FCollisionShape& shape, bool traceComplex, const TArray<AActor*>* ignoredActors) const
+	const FQuat& quat, 
+	const FCollisionShape& shape, bool traceComplex) const
 {
 	if (!w) return false;
 	FCollisionQueryParams QueryParams;
-	if (ignoredActors && ignoredActors->Num() > 0)
-	{
-		QueryParams.AddIgnoredActors(*ignoredActors);
-	}
+	ConfigureCollisionQueryParams(QueryParams);
 	QueryParams.bTraceComplex = traceComplex;
-	return w->SweepSingleByChannel(outHit, start, end, quat, channel,
+	FCollisionObjectQueryParams CollisionObjectQueryParams;
+	ConfigureCollisionObjectQueryParams(CollisionObjectQueryParams);
+	return w->SweepSingleByObjectType(outHit, start, end, quat, CollisionObjectQueryParams,
 		shape, QueryParams);
+}
+
+void UHitSensor::ConfigureCollisionQueryParams(FCollisionQueryParams& params) const
+{
+	if (ActorsToIgnore && ActorsToIgnore->Num() > 0)
+	{
+		params.AddIgnoredActors(*ActorsToIgnore);
+	}
+}
+
+void UHitSensor::ConfigureCollisionObjectQueryParams(FCollisionObjectQueryParams& params) const
+{
+	for (const EObjectTypeQuery ObjectType : CollisionChannels)
+	{
+		ECollisionChannel CollisionChannel = UEngineTypes::ConvertToCollisionChannel(ObjectType);
+		if (CollisionChannel != ECC_MAX)
+		{
+			params.AddObjectTypesToQuery(CollisionChannel);
+		}
+	}
 }
 
 void UHitSensor::Debug(UWorld* w, const FVector& start, const FVector& end,  float traceShapeRadius) const
 {
-	if (!EnableDebug) return;
 	if (!w) return;
 	if (ObjectHit)
 	{
