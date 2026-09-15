@@ -38,7 +38,7 @@ protected:
 	UPROPERTY(VisibleAnywhere, meta = (Tooltip = "Origin of the Tracking Space. Camera Component moves in this coordinate space."))
 	class USceneComponent* TrackingSpaceOrigin;
 
-	UPROPERTY(VisibleAnywhere, meta=(Tooltip = "VRCamera that will follow the VR Device in a Tracking Space"))
+	UPROPERTY(VisibleAnywhere, meta = (Tooltip = "VRCamera that will follow the VR Device in a Tracking Space"))
 	class UCameraComponent* CameraComponent;
 
 	UPROPERTY(VisibleDefaultsOnly, meta = (Tooltip = "Collision Capsule"))
@@ -76,10 +76,10 @@ protected:
 
 	UPROPERTY(Transient)
 	class UMaterialInstanceDynamic* FadeDynamicMaterial;
-	
+
 	UPROPERTY(EditDefaultsOnly, Category = "VR Camera Fade Material")
 	class UMaterialInterface* FadeMaterialBase;
-			
+
 	//---State Managers---
 
 	UPROPERTY(VisibleAnywhere)
@@ -131,25 +131,28 @@ protected:
 	UPROPERTY(VisibleAnywhere)
 	class UObstacleSensor* ObstacleSensor;
 
+	UPROPERTY(VisibleAnywhere)
+	class UMotionControllerHitSensor* LeftMotionControllerHitSensor;
+
+	UPROPERTY(VisibleAnywhere)
+	UMotionControllerHitSensor* RightMotionControllerHitSensor;
+
+	UPROPERTY(VisibleAnywhere)
+	UStaticMeshComponent* LeftMotionControllerHitTarget;
+
+	UPROPERTY(VisibleAnywhere)
+	UStaticMeshComponent* RightMotionControllerHitTarget;
+
+	//UI
+	//UPROPERTY(VisibleAnywhere)
+
+	//Attributes
+	UPROPERTY(VisibleAnywhere)
+	class UVRCharacterAttributeComponent* CharacterAttributeComponent;
+
 #pragma endregion
 
 #pragma region UPROPERTIES
-
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion", meta = (DisplayName = "Walk Speed"))
-	float walkSpeed = 200.f;
-
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion", meta = (DisplayName = "Run Speed"))
-	float runSpeed = 300.f;
-
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion")
-	float JumpWaitTimer = 5.f;
-	
-	UPROPERTY(EditAnywhere, Category = "VR Locomotion Thresholds")
-	float CrouchThreshold = 10.f;
-				
-	UPROPERTY(EditAnywhere, Category = "VR Camera Fade", meta = ( ClampMin = "0.001", UIMin = "0.001"))
-	float CameraFadeDistance = 5.f;
-	
 	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Dead Zone Radius", ClampMin = "0.001", UIMin = "0.001"))
 	float DeadZoneRadius = 40.f;
 
@@ -168,26 +171,23 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "VR Locomotion Decals", meta = (DisplayName = "Locomotion Player Anchor Height", ClampMin = "0.001", UIMin = "0.001"))
 	float PlayerAnchorZoneHeight = 300.f;
 
+	UPROPERTY(EditAnywhere, Category = "VR Grab Mechanics")
+	FName RightHandGrabSocketName = FName(TEXT("hand_r_grip"));
+
+	UPROPERTY(EditAnywhere, Category = "VR Grab Mechanics")
+	FName LeftHandGrabSocketName = FName(TEXT("hand_l_grip"));
+
 	UPROPERTY(EditAnywhere, Category = "VR Simulation", meta = (Tooltip = "Player height that will be used in Simulation"))
 	float PlayerPreviewHeight = 186.f;
-
-	UPROPERTY(EditAnywhere, Category = "VR Simulation")
-	ELocomotionSpace PreviewLocomotionState;
-
-	UPROPERTY(EditAnywhere, Category = "VR Simulation")
-	bool EnableIkDebug = false;
-
-	UPROPERTY(EditAnywhere, Category = "VR Simulation")
-	bool EnableStateManagersDebug = false;
 #pragma endregion
 
 #pragma region UFunctions
-	UFUNCTION()	
+	UFUNCTION()
 	void OnHMD_Recentered();
 
 	UFUNCTION(BlueprintCallable)
 	void RecenterTrackingSpaceToLocation(FVector TargetWorldLocation);
-	
+
 	UFUNCTION(BlueprintCallable)
 	void RecenterTrackingSpaceToActor();
 #pragma endregion
@@ -207,58 +207,94 @@ protected:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 #pragma region Input Actions Binding
-	///----LOCOMOTION----
-
-	/// <summary>
-	/// Called when we press Y button on the left motion controller
-	/// </summary>
-	void OnToggleMovementPressed();
-	/// <summary>
-	/// Called when we release Y button on the left motion controller
-	/// </summary>
-	void OnToggleMovementReleased();
 
 	///----HAND GRABS----
 
 	/// <summary>
 	/// Called when we press Right Grab Button
 	/// </summary>
-	void OnRightGrabButtonPressed();
+	virtual void OnRightGrabButtonPressed();
 	/// <summary>
 	/// Called when we release right grab button
 	/// </summary>
-	void OnRightGrabButtonReleased();
+	virtual void OnRightGrabButtonReleased();
 	/// <summary>
 	/// Called when we press left grab button
 	/// </summary>
-	void OnLeftGrabButtonPressed();
+	virtual void OnLeftGrabButtonPressed();
 	/// <summary>
 	/// Called when we release left grab button
 	/// </summary>
-	void OnLeftGrabButtonReleased();
+	virtual void OnLeftGrabButtonReleased();
+
+	///---MENU BUTTONS---
+
+	virtual void OnLeftMenuButtonPressed();
+	virtual void OnLeftMenuButtonReleased();
+	virtual void OnRightMenuButtonPressed();
+	virtual void OnRightMenuButtonReleased();
+
+	///---Reset VR---
+	virtual void OnResetVRPressed() {}
+	virtual void OnResetVRReleased() {}
 
 	///----HAND TRIGGERS----
 
 	/// <summary>
 	/// Called when we press right hand trigger
 	/// </summary>
-	void OnRightTriggerButtonPressed();
+	virtual void OnRightTriggerButtonPressed();
 	/// <summary>
 	/// Called when we release right hand trigger
 	/// </summary>
-	void OnRightTriggerButtonReleased();
+	virtual void OnRightTriggerButtonReleased();
 	/// <summary>
 	/// Called when we press left hand trigger
 	/// </summary>
-	void OnLeftTriggerButtonPressed();
+	virtual void OnLeftTriggerButtonPressed();
 	/// <summary>
 	/// Called when we release left hand trigger
 	/// </summary>
-	void OnLeftTriggerButtonReleased();
+	virtual void OnLeftTriggerButtonReleased();
 
-	///----BATTLE MODE----	
+	///----PRIMARY BUTTONS----
+
+	virtual void OnLeftPrimaryButtonPressed();
+	virtual void OnLeftPrimaryButtonReleased();
+	virtual void OnRightPrimaryButtonPressed();
+	virtual void OnRightPrimaryButtonReleased();
+
+	///---SECONDARY BUTTONS---
+
+	virtual void OnLeftSecondaryButtonPressed();
+	virtual void OnLeftSecondaryButtonReleased();
+	virtual void OnRightSecondaryButtonPressed();
+	virtual void OnRightSecondaryButtonReleased();
+
+	///---Thumbsticks---
+
+	virtual void OnLeftThumbstickPressed();
+	virtual void OnLeftThumbstickReleased();
+	virtual void OnRightThumbstickPressed();
+	virtual void OnRightThumbstickReleased();
+
+	///---GRAB AXIS---
+
+	virtual void OnLeftGrabAxisChanged(float value);
+	virtual void OnRightGrabAxisChanged(float value);
+
+	///---THUMBSTICK AXIS---
+
+	virtual void OnLeftThumbstickXChanged(float value);
+	virtual void OnLeftThumbstickYChanged(float value);
+	virtual void OnRightThumbstickXChanged(float value);
+	virtual void OnRightThumbstickYChanged(float value);
+
+	///---TRIGGER AXIS---
+	virtual void OnLeftTriggerAxisChanged(float value);
+	virtual void OnRightTriggerAxisChanged(float value);
 #pragma endregion
-	
+
 	/// <summary>
 	/// During playing the height of the player changes. And here we resize ze Physics collision capsule component, and we also ensure that 
 	/// capsule is moved to the floor. And also we need to move Skeletal mesh down for -Capsule Half Height
@@ -309,7 +345,7 @@ public:
 	/// </summary>
 	/// <returns>[0 ; 1] Ground Velocity Ratio</returns>
 	float GetGroundVelocityRatio() const;
-	
+
 	/// <summary>
 	/// Updates delta between camera and head bone of the Skeletal Mesh
 	/// </summary>
@@ -318,11 +354,13 @@ public:
 	{
 		cameraHeadDelta = delta;
 	}
-	
+
 	AActor* GetObstacle(bool& outHit, FHitResult& ouHitResult) const;
 	bool GetGroundHit(FHitResult& hit) const;
 
-#pragma region IStateDriven
+#pragma region IVRCharacterInterface
+	void Move(const FVector& vel, bool instant = false);
+
 	virtual void Move(const FVector& dir, float value, bool instant = false) override;
 	/// <summary>
 	/// Stops all the movement immediatly
@@ -344,17 +382,25 @@ public:
 	{
 		return CameraComponent;
 	}
-	virtual USkeletalMeshComponent* GetMesh() const override
+	virtual USkeletalMeshComponent* GetSkeletalMesh() const override
 	{
 		return SkeletalMeshComponent;
 	}
-	virtual UMotionControllerComponent* GetLeftMotionController() const override
+	virtual UMotionControllerComponent* GetMotionController(bool right) const override
 	{
+		if (right)
+		{
+			return RightMotionController;
+		}
 		return LeftMotionController;
 	}
-	virtual UMotionControllerComponent* GetRightMotionController() const override
+	virtual class UMotionControllerHitSensor* GetMotionControllerHitSensor(bool right) const override
 	{
-		return RightMotionController;
+		if (right)
+		{
+			return RightMotionControllerHitSensor;
+		}
+		return LeftMotionControllerHitSensor;
 	}
 	virtual class UObstacleSensor* GetObstacleSensor() const override;
 	virtual class UVelocitySensor* GetCameraVelocitySensor() const override;
@@ -384,6 +430,7 @@ public:
 	/// </summary>
 	void ApplyCameraFade(float cameraFadeOpacity);
 	bool IsJumping() const;
+	void SetNewActorTransform(const FTransform& newTransform, bool sweep, FHitResult* outHit, ETeleportType teleType) override;
 #pragma endregion
 
 private:
@@ -394,4 +441,15 @@ private:
 	void InitializeBodyMetrics();
 	UPROPERTY()
 	TArray<AActor*> m_ActorsToIgnore;
+	class UVRInteractionSubsystem* VRInteractionSubSystem;
+	UVRInteractionSubsystem* GetVRSubSystem();
+	void UpdateVRControllerButtonState(EVRControllerHand hand, EVRButtonType butType, bool bIsPressed);
+	void UpdadeVRControllerAxisState(EVRControllerHand hand, EVRButtonType butType, float axisValue);
+	void UpdateVRControllerThumbstickAxis(EVRControllerHand hand, float axisValue, bool xAxis);
+	void UpdateVRControllerTouchState(EVRControllerHand hand, EVRButtonType butType, bool bIsTouched);
+	void UpdateVRAnimInstanceGripState(bool right, bool pressed);
+	void UpdateVRAnimInstanceTriggerState(bool right, bool pressed);
+	void DisablePhysicsAndCollision(UPrimitiveComponent* comp);
+	void ProcessHitTarget(UStaticMeshComponent* hitTarget, UMotionControllerHitSensor* hitSensor);
+	void OnHMDRecenterFinished();
 };

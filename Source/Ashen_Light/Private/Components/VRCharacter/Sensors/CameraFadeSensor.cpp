@@ -18,8 +18,8 @@ void UCameraFadeSensor::DoScan(float DeltaTime)
 	FVector end = start - FVector(0.f, 0.f, m_MaxScanDistance * FadeCheckDistanceRatio);
 	FHitResult outHit;
 	const bool bHit = DoScanInternal(w, outHit, start, end, 
-		FQuat::Identity, ECollisionChannel::ECC_WorldStatic, 
-		FCollisionShape::MakeSphere(FadeCheckRadius), false, ActorsToIgnore);
+		FQuat::Identity, 
+		FCollisionShape::MakeSphere(FadeCheckRadius), false);
 	if (bHit && outHit.bBlockingHit)
 	{
 		Hit = outHit;
@@ -29,7 +29,7 @@ void UCameraFadeSensor::DoScan(float DeltaTime)
 	{
 		ObjectHit = false;
 	}
-
+	if (!EnableDebug) return;
 	Debug(w, start, end, FadeCheckRadius);
 }
 

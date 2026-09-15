@@ -25,4 +25,5 @@ public:
 	//Gets Actor World Transform
 	virtual FTransform GetActorTransform() = 0;
 	virtual void SetNewActorLocation(const FVector& worldLocation, bool sweep, FHitResult* outHit, ETeleportType teleType) = 0;
+	virtual void SetNewActorTransform(const FTransform& newTransform, bool sweep, FHitResult* outHit, ETeleportType teleType) = 0;
 };

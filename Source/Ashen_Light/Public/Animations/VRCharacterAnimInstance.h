@@ -80,6 +80,12 @@ public:
 			LeftMotionControllerAnimState = EVRControllerState::VRCS_Neutral;
 		}
 	}
+
+	FORCEINLINE FName GetHandSocketName(bool right)
+	{
+		return right ? RightHandSocketName : LeftHandSocketName;
+	}
+
 	/// <summary>
 	/// Calculates universal scale factor. Location of the camera in the Skeletal Mesh basis / Location of the head bone in the same basis. Also sets delta value for Skel  mesh position adjustment
 	/// </summary>
@@ -89,22 +95,24 @@ public:
 	/// Will be called in Tick of the Pawn
 	/// </summary>
 	/// <param name="DeltaTime"></param>
-	void CalculateElbowJointTarget(float DeltaTime, bool debug = false);
+	void CalculateElbowJointTarget(float DeltaTime);
 	/// <summary>
 	/// Calculate the proper rotation of the spine bones. Will be called in the Tick of the pawn
 	/// </summary>
 	/// <param name="DeltaTime"></param>
 	/// <param name="debug"></param>
-	void CalculateSpineRotation(float DeltaTime, bool debug = false);
+	void CalculateSpineRotation(float DeltaTime);
 
-	void CalculateFootIKEffectors(AActor* current, float DeltaTime, bool debug = false);
+	void CalculateFootIKEffectors(AActor* current, float DeltaTime);
 
 	void CalculateFootHeight();
+
+	void CalculateMotionControllerTransform(class UMotionControllerComponent* comp, bool right, float DeltaTime);
 protected:
 	class AVRCharacter* Self;
 	class UCameraComponent* CameraComponent;
 	class USkeletalMeshComponent* SkeletalMesh;
-	class UMotionControllerComponent* LeftController;
+	UMotionControllerComponent* LeftController;
 	UMotionControllerComponent* RightController;
 
 	UPROPERTY(BlueprintReadOnly)
@@ -138,22 +146,22 @@ protected:
 	float ElbowJointTargetInterpolationConstant = 3.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK | Right")
-	FString RightIndexSocketName = FString("index_01_r_s");
+	FName RightIndexSocketName = FName(TEXT("index_01_r_s"));
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK | Right")
-	FString RightMiddleSocketName = FString("middle_01_r_s");
+	FName RightMiddleSocketName = FName(TEXT("middle_01_r_s"));
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK | Right")
-	FString RightHandSocketName = FString("hand_r_s");
+	FName RightHandSocketName = FName(TEXT("hand_r_s"));
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK | Right")
-	FString RightLowerArmSocketName = FString("lowerarm_r_s");
+	FName RightLowerArmSocketName = FName(TEXT("lowerarm_r_s"));
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK | Right")
-	FString RightUpperArmSocketName = FString("upperarm_r_s");
+	FName RightUpperArmSocketName = FName(TEXT("upperarm_r_s"));
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK | Right")
-	FString RightLowerArmBoneName = FString("lowerarm_r");
+	FName RightLowerArmBoneName = FName(TEXT("lowerarm_r"));
 
 	UPROPERTY(VisibleAnywhere, Category = "VR HAND IK | Right")
 	FVector RightPalmPlaneNormal = FVector::ZeroVector;
@@ -165,22 +173,22 @@ protected:
 	FVector DefRightElbowJointTarget = FVector(-55.f, 0.f, 93.f);
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK | Left")
-	FString LeftIndexSocketName = FString("index_01_l_s");
+	FName LeftIndexSocketName = FName(TEXT("index_01_l_s"));
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK | Left")
-	FString LeftMiddleSocketName = FString("middle_01_l_s");
+	FName LeftMiddleSocketName = FName(TEXT("middle_01_l_s"));
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK | Left")
-	FString LeftHandSocketName = FString("hand_l_s");
+	FName LeftHandSocketName = FName(TEXT("hand_l_s"));
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK | Left")
-	FString LeftLowerArmSocketName = FString("lowerarm_l_s");
+	FName LeftLowerArmSocketName = FName(TEXT("lowerarm_l_s"));
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK | Left")
-	FString LeftUpperArmSocketName = FString("upperarm_l_s");
+	FName LeftUpperArmSocketName = FName(TEXT("upperarm_l_s"));
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK | Left")
-	FString LeftLowerArmBoneName = FString("lowerarm_l");
+	FName LeftLowerArmBoneName = FName(TEXT("lowerarm_l"));
 
 	UPROPERTY(VisibleAnywhere, Category = "VR HAND IK | Left")
 	FVector LeftPalmPlaneNormal = FVector::ZeroVector;
@@ -191,8 +199,26 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK | Left")
 	FVector DefLeftElbowJointTarget = FVector(55.f, 0.f, 93.f);
 
+	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK | Left")
+	FRotator LeftHandRotOffset = FRotator(0.f, 0.f, -180.f);
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK | Right")
+	FRotator RightHandRotOffset = FRotator(0.f, -180.f, 0.f);
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK | Right")
+	float RightObstacleSensorDistanceMultipl = 1.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK | Left")
+	float LeftObstacleSensorDistanceMultipl = 1.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK | Right", meta = (Tooltip = "We only need this socket for the left side."))
+	FName LeftMiddleEndSocket = FName("middle_03_lSocket");
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR HAND IK")
+	float middleDistantFalangLength = 10.f;
+	
 	UPROPERTY(EditDefaultsOnly, Category = "VR HEAD IK")
-	FString HeadName = FString("head");
+	FName HeadName = FName(TEXT("head"));
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR LEG IK")
 	float CrouchInterpolationConstant = 5.f;
@@ -207,19 +233,19 @@ protected:
 	float LayerBlendInterpolationConstant = 0.5f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR LEG IK | Right")
-	FString RightFootBoneSocketName = FString("foot_rSocket");
+	FName RightFootBoneSocketName = FName(TEXT("foot_rSocket"));
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR LEG IK | Left")
-	FString LeftFootBoneSocketName = FString("foot_lSocket");
+	FName LeftFootBoneSocketName = FName(TEXT("foot_lSocket"));
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR LEG IK")
 	float FloorDetectionThreshold = 10.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR LEG IK")
-	FString BallSocketName = FString("ball_Socket");
+	FName RightBallSocketName = FName(TEXT("ball_r_Socket"));
 	
 	UPROPERTY(EditDefaultsOnly, Category = "VR SPINE IK")
-	FString Spine03SocketName = FString("spine_03_s");
+	FName Spine03SocketName = FName(TEXT("spine_03_s"));
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR SPINE IK")
 	float Spine01BoneWeight = 0.15f;
@@ -232,6 +258,18 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "VR SPINE IK")
 	float SpineIKInterpolationConstant = 3.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR IK Debug")
+	bool DebugElbowJointTarget = false;
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR IK Debug")
+	bool DebugFootIKEffectors = false;
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR IK Debug")
+	bool DebugSpineRotation = false;
+
+	UPROPERTY(EditDefaultsOnly, Category = "VR IK Debug")
+	bool DebugHandObstacleSensor = false;
 
 	UPROPERTY(BlueprintReadOnly)
 	EVRControllerState RightMotionControllerAnimState = EVRControllerState::VRCS_Neutral;
@@ -269,6 +307,15 @@ protected:
 	UPROPERTY(BlueprintReadOnly)
 	FVector RightFootEffectorLocation;
 
+	UPROPERTY(BlueprintReadOnly, Category = "VR IK")
+	FVector RightHandPushOutOffset = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "VR IK")
+	FVector LeftHandPushOutOffset = FVector::ZeroVector;
+
+	UPROPERTY(EditAnywhere, Category = "VR IKConfig")
+	float PushOutInterpSpeed = 20.0f;
+
 	UFUNCTION(BlueprintPure)
 	bool IsGrounded() const;
 private:
@@ -279,17 +326,7 @@ private:
 	/// <summary>
 	/// Get Velocity in XY Plane
 	/// </summary>
-	void GetGroundVelocity();
-	/// <summary>
-	/// Get Transform for Motion Controller IK
-	/// </summary>
-	void GetMotionControllersIKTransform();
-	/// <summary>
-	/// Calculates the Motion Controller Transform in a Skeletal Mesh Space
-	/// </summary>
-	/// <param name="comp">Motion Controller Component</param>
-	/// <param name="rotationOffset">Additional rotation offset</param>
-	void CalculateMotionControllerTransform(UMotionControllerComponent* comp, const FRotator& rotationOffset, FTransform& motionControllerTransform);		
+	void GetGroundVelocity();	
 	/// <summary>
 	/// Initialization of the Anim Instance in PIE mode
 	/// </summary>
@@ -343,9 +380,9 @@ private:
 	/// </summary>
 	/// <param name="rigth">True for right</param>
 	/// <param name="deltaTime"></param>
-	void CalculateElbowJointTarget(bool rigth, float deltaTime, bool debug = false);
+	void CalculateElbowJointTarget(bool rigth, float deltaTime);
 
-	void CalculateFootIKEffector(AActor* currentActor, bool right, float DeltaTime, bool debug);
+	void CalculateFootIKEffector(AActor* currentActor, bool right, float DeltaTime);
 
 	/// <summary>
 	/// Calculates Spine Rotation of spine_01, spine_02, spine_03 according to weights
@@ -353,11 +390,15 @@ private:
 	/// <param name="right"></param>
 	/// <param name="deltaTime"></param>
 	/// <param name="debug"></param>
-	void CalculateSpineRotationAccordingToTheControllerLocation(bool right, float deltaTime, bool debug = false);
+	void CalculateSpineRotationAccordingToTheControllerLocation(bool right, float deltaTime);
 
 	void CalculateLegIkEnable(float DeltaTime);
 
 	void CalculateLayerBlendForLegs(float DeltaTime);
+	void CalculateDefaultMotionControllerIKTransform(UMotionControllerComponent* comp,
+		bool right,
+		FTransform& mcTransform,
+		const FVector& pushOutOffset);
 #pragma region State
 	bool m_Initialized;//Do we perform initialization of the blueprint
 	/// IK Distances
@@ -372,6 +413,7 @@ private:
 	bool bIsLeftTriggerPressed = false;
 	float CameraHeadDelta = 0.f;
 	float footHeight;
+	float middleFingerLength;
 #pragma endregion
 
 };

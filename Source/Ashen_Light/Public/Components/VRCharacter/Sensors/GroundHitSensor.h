@@ -23,8 +23,8 @@ public:
 	}
 protected:
 	virtual bool DoScanInternalMulti(UWorld* w, TArray<FHitResult>& outHit, const FVector& start,
-		const FVector& end, const FQuat& quat, ECollisionChannel channel,
-		const FCollisionShape& shape, bool traceComplex, const TArray<AActor*>* ignoredActors) const;
+		const FVector& end, const FQuat& quat,
+		const FCollisionShape& shape, bool traceComplex) const;
 
 	UPROPERTY(EditAnywhere, Category = "Ground Sensor", meta = (DisplayName = "Ground Detection Threshold", Tooltip = "Value that will be added to the end point of the Sphere Trace for Ground Detection"))
 	float GroundDetectionThreshold = 10.f;

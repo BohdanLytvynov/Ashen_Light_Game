@@ -19,7 +19,7 @@ UTrackingSpaceMovementComponent::UTrackingSpaceMovementComponent(const FObjectIn
 
 void UTrackingSpaceMovementComponent::OnStateTick(float DeltaTime)
 {
-	HandleJump(DeltaTime);
+	Super::HandleJump();
 	HandleMovement(DeltaTime);
 }
 
@@ -98,13 +98,6 @@ void UTrackingSpaceMovementComponent::HandleMovement(float DeltaTime)
 	}
 }
 
-void UTrackingSpaceMovementComponent::HandleJump(float DeltaTime)
-{
-	IVRCharacterInterface* vrChar = GetContext();
-	if (!vrChar) return;
-
-}
-
 bool UTrackingSpaceMovementComponent::IsSwiningArms(IVRCharacterInterface* vrChar)
 {
 	if (!vrChar) return false;
@@ -112,9 +105,9 @@ bool UTrackingSpaceMovementComponent::IsSwiningArms(IVRCharacterInterface* vrCha
 	if (!rightHandSensor) return false;
 	UVelocitySensor* leftHandSensor = vrChar->GetMotionControllerVelocitySensor(false);
 	if (!leftHandSensor) return false;
-	float rightContrVelocity = rightHandSensor->GetVelocity().Size();
-	float leftContrVelocity = leftHandSensor->GetVelocity().Size();
-	return rightContrVelocity > SwiningThreshold && leftContrVelocity > SwiningThreshold;
+	float rightContrVelocity = rightHandSensor->GetVelocity().SizeSquared();
+	float leftContrVelocity = leftHandSensor->GetVelocity().SizeSquared();
+	return rightContrVelocity > SwiningThreshold * SwiningThreshold && leftContrVelocity > SwiningThreshold * SwiningThreshold;
 }
 
 bool UTrackingSpaceMovementComponent::CheckObstacles(IVRCharacterInterface* vrChar, FHitResult& outRes)

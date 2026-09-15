@@ -16,6 +16,7 @@ void UVelocitySensor::DoScan(float DeltaTime)
 	//v = ds/dt. ds = |start - end|, as dt -> 0 we get the Instant Velocity
 	m_Velocity = ds / DeltaTime;
 	m_PrevPosition = compLocation;
+	if (!EnableDebug) return;
 	Debug(component->GetName());
 }
 
@@ -31,7 +32,6 @@ void UVelocitySensor::ConfigureSpace(ERelativeTransformSpace space)
 
 void UVelocitySensor::Debug(const FString& compName)
 {
-	if (!EnableDebug) return;
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(MsgDebugIndex, MsgDebugDuration, MsgDebugColor, FString::Printf(TEXT("%s velocity: %s"), *compName, *m_Velocity.ToString()));

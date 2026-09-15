@@ -26,7 +26,7 @@ void UObstacleSensor::DoScan(float DeltaTime)
 	float halfHeight = caps->GetScaledCapsuleHalfHeight() * CollisionShapeHeightScaleFactor;
 	m_CapsHalfHeight = halfHeight;
 	FCollisionShape capsule = FCollisionShape::MakeCapsule(radius, halfHeight);
-	bool hit = DoScanInternal(w, hitResult, start, end, FQuat::Identity, ECollisionChannel::ECC_WorldStatic, capsule, false, ActorsToIgnore);
+	bool hit = DoScanInternal(w, hitResult, start, end, FQuat::Identity, capsule, false);
 	if (hit && hitResult.bBlockingHit)
 	{
 		Hit = hitResult;
@@ -36,12 +36,12 @@ void UObstacleSensor::DoScan(float DeltaTime)
 	{
 		ObjectHit = false;
 	}
+	if (!EnableDebug) return;
 	Debug(w, start, end, radius);
 }
 
 void UObstacleSensor::Debug(UWorld* w, const FVector& start, const FVector& end, float traceShapeRadius) const
 {
-	if (!EnableDebug) return;
 	if (!w) return;
 	if (ObjectHit)
 	{
