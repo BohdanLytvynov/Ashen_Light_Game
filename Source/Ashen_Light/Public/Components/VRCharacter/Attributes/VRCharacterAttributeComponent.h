@@ -30,9 +30,6 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "VR Camera Fade", meta = (ClampMin = "0.001", UIMin = "0.001"))
 	float CameraFadeDistance = 5.f;
-	
-	UPROPERTY(EditAnywhere, Category = "VR Interaction")
-	float ThrowSpeed = 200.f;
 #pragma endregion
 
 		

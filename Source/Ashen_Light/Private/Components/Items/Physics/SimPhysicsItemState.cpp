@@ -3,7 +3,7 @@
 
 #include "Components/Items/Physics/SimPhysicsItemState.h"
 #include "Components/Base/StateManagerComponent.h"
-#include "Interfaces/Thrower.h"
+#include "Subsystems/PhysicsSolverSubsystem.h"
 
 USimPhysicsItemState::USimPhysicsItemState(const FObjectInitializer& init) : Super(init)
 {
@@ -14,37 +14,38 @@ void USimPhysicsItemState::OnStateEnter()
 	Super::OnStateEnter();
 
 	IInteractable* inter = GetContext();
-	if (!inter) return;
-
-	UMeshComponent* stMesh = inter->GetMesh();
-	if (!stMesh) return;
-
-	USceneComponent* rootComp = stMesh->GetAttachmentRoot() ? stMesh->GetAttachmentRoot() : stMesh;
-	UPrimitiveComponent* primRoot = Cast<UPrimitiveComponent>(rootComp);
-
-	if (primRoot)
+	if (!inter) return;	
+	UPrimitiveComponent* primRoot = inter->GetPhysicsRootComponent();
+	if (!primRoot) return;
+	//We cache velocity first cause we need 
+	const FVector throwVelocity = inter->GetLinearVelocity();
+	float throwVel = 0.f;
+	// Enable full rigid body physics simulation and gravity
+	primRoot->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	primRoot->SetSimulatePhysics(true);
+	const AActor* owner = inter->GetItemOwner();
+	FVector linearMomentum = FVector::ZeroVector;
+	float mass = inter->GetPhysicalMass();
+	FVector finalVelocity = throwVelocity;
+	if (OverrideThrowSpeed)
 	{
-		// Enable full rigid body physics simulation and gravity
-		primRoot->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-		primRoot->SetSimulatePhysics(true);
-		// Optional: Apply cached linear velocity if the item was thrown
-		FVector throwVelocity = inter->GetLinearVelocity().GetSafeNormal();
-		if (!throwVelocity.IsNearlyZero())
+		FVector throwDir = FVector::ZeroVector;
+		if (UseForwardVectorForThrow)
 		{
-			AActor* owner = inter->GetItemOwner();
-			IThrower* thrower = Cast<IThrower>(owner);
-			if (!thrower)
-			{
-				float vel = thrower->GetCurrentThrowVelocity();
-				FVector dir = throwVelocity.GetSafeNormal();
-				primRoot->SetPhysicsLinearVelocity(dir * vel, true);
-			}
-			else
-			{
-				primRoot->SetPhysicsLinearVelocity(throwVelocity, true);
-			}			
+			throwDir = inter->GetBasisVector(FName("X"));
 		}
+		else
+		{
+			throwDir = throwVelocity.GetSafeNormal();
+			if (throwDir.IsNearlyZero())
+			{
+				throwDir = inter->GetBasisVector(FName("X"));
+			}
+		}
+		finalVelocity = throwDir * ThrowSpeed;
 	}
+	linearMomentum = UPhysicsSolverSubsystem::CalculateLinearMomentum_S(mass, finalVelocity);
+	primRoot->AddImpulse(linearMomentum);
 }
 
 void USimPhysicsItemState::BeginPlay()

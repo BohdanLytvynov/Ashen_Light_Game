@@ -6,14 +6,13 @@
 #include "Characters/CharacterBase.h"
 #include "Enums.h"
 #include "Interfaces/VRCharacterInterface.h"
-#include "Interfaces/Thrower.h"
 #include "VRCharacter.generated.h"
 /**
  * 
  */
 
 UCLASS()
-class ASHEN_LIGHT_API AVRCharacter : public APawn, public IVRCharacterInterface, public IThrower
+class ASHEN_LIGHT_API AVRCharacter : public APawn, public IVRCharacterInterface
 {
 	GENERATED_BODY()
 	/// <summary>
@@ -359,12 +358,9 @@ public:
 	AActor* GetObstacle(bool& outHit, FHitResult& ouHitResult) const;
 	bool GetGroundHit(FHitResult& hit) const;
 
-#pragma region IThrower
-	float GetCurrentThrowVelocity() const override;
-#pragma endregion
-
-
 #pragma region IVRCharacterInterface
+	void Move(const FVector& vel, bool instant = false);
+
 	virtual void Move(const FVector& dir, float value, bool instant = false) override;
 	/// <summary>
 	/// Stops all the movement immediatly

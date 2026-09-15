@@ -409,20 +409,6 @@ APawn* AInteractableItem::GetItemOwner() const
 	return m_OwningActor.Get();
 }
 
-bool AInteractableItem::TryGetItemGrabSocketTransform(bool primary, FTransform& outTransform)
-{
-	const FName socketName = primary ? PrimaryGrabSocket : SecondaryGrabSocket;
-	if (socketName.IsNone() || !ItemMesh) return false;
-
-	if (ItemMesh->DoesSocketExist(socketName))
-	{
-		outTransform = ItemMesh->GetSocketTransform(socketName, ERelativeTransformSpace::RTS_World);
-		return true;
-	}
-
-	return false;
-}
-
 FName AInteractableItem::GetItemSocketName(bool primary)
 {
 	if (primary)
@@ -434,6 +420,51 @@ FName AInteractableItem::GetItemSocketName(bool primary)
 		return SecondaryGrabSocket;
 	}
 	return NAME_None;
+}
+
+float AInteractableItem::GetPhysicalMass() const
+{
+	if (PhysicalMass == 0.f)
+	{
+		if (!CollisionShape)
+		{
+			PhysicalMass = 1.f;
+			return PhysicalMass;
+		}
+		UPrimitiveComponent* prim = Cast<UPrimitiveComponent>(CollisionShape);
+		if (!prim)
+		{
+			PhysicalMass = 1.f;
+			return PhysicalMass;
+		}
+		const float calculatedMass = prim->GetMass();
+		PhysicalMass = calculatedMass > 0.f? calculatedMass : 1.f;
+	}
+
+	return PhysicalMass;
+}
+
+UPrimitiveComponent* AInteractableItem::GetPhysicsRootComponent() const
+{
+	return Cast<UPrimitiveComponent>(GetRootComponent());
+}
+
+FVector AInteractableItem::GetBasisVector(FName axis) const
+{
+	if (axis == FName("X"))
+	{
+		return GetActorForwardVector();
+	}
+	else if(axis == FName("Y"))
+	{
+		return GetActorRightVector();
+	}
+	else if(axis == FName("Z"))
+	{
+		return GetActorUpVector();
+	}
+	checkf(false, TEXT("Invalid axis name: %s passed to GetBasisVector!"), *axis.ToString());
+	return FVector::ZeroVector;
 }
 
 void AInteractableItem::DisableCollision(UPrimitiveComponent* comp)

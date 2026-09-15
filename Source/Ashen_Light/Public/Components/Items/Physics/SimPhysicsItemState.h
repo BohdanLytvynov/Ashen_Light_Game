@@ -18,6 +18,12 @@ public:
 	void OnStateEnter() override;
 	void BeginPlay() override;
 protected:
+	UPROPERTY(EditAnywhere, Category = "Physics Item State")
+	float ThrowSpeed = 200.f;
+	UPROPERTY(EditAnywhere, Category = "Physics Item State", meta = (Tooltip = "Do we need to override calculated move speed of the item before we release it."))
+	bool OverrideThrowSpeed = false;
+	UPROPERTY(EditAnywhere, Category = "Physics Item State", meta = (Tooltip = "Use forward vector of the Item as the throw direction"))
+	bool UseForwardVectorForThrow = false;
 	UFUNCTION()
 	void OnRootSleep(UPrimitiveComponent* SleepingComponent, FName BoneName);
 };

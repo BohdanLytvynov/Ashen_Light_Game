@@ -105,8 +105,15 @@ public:
 	/// </summary>
 	/// <param name="primary"></param>
 	virtual void ResetStateForHand(bool primary) = 0;
-	virtual bool TryGetItemGrabSocketTransform(bool primary, FTransform& outTransform) = 0;
 	virtual class UVRInteractionSubsystem* GetVRInterSubsystem() = 0;
 	virtual FName GetItemSocketName(bool primary) = 0;
+	virtual float GetPhysicalMass() const = 0;
+	virtual UPrimitiveComponent* GetPhysicsRootComponent() const = 0;
+	/// <summary>
+	/// Get basis Vector according to Axis: XYZ
+	/// </summary>
+	/// <param name="axis"></param>
+	/// <returns></returns>
+	virtual FVector GetBasisVector(FName axis) const = 0;
 protected:
 };

@@ -875,9 +875,17 @@ bool AVRCharacter::GetGroundHit(FHitResult& hit) const
 	return GroundHitSensor->IsHit();
 }
 
-float AVRCharacter::GetCurrentThrowVelocity() const
+void AVRCharacter::Move(const FVector& vel, bool instant)
 {
-	return CharacterAttributeComponent->ThrowSpeed;
+	if (!PawnMovement) return;
+	if (instant)
+	{
+		PawnMovement->Velocity = vel;
+	}
+	else
+	{
+		AddMovementInput(vel);
+	}
 }
 
 void AVRCharacter::Move(const FVector& dir, float value, bool instant)

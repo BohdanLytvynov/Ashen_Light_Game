@@ -22,6 +22,7 @@ protected:
 	void DisableCollision(UPrimitiveComponent* comp);
 	void ConfigureRoot();
 	void UpdateRoot();
+	float mutable PhysicalMass = 0.f;
 
 #pragma region Components
 	UPROPERTY(VisibleAnywhere)
@@ -128,8 +129,19 @@ public:
 	void PromoteSecondaryToPrimary() override;
 	APawn* GetItemOwner() const override;
 	FORCEINLINE UVRInteractionSubsystem* GetVRInterSubsystem() override;
-	bool TryGetItemGrabSocketTransform(bool primary, FTransform& outTransform) override;
 	FName GetItemSocketName(bool primary) override;
+	/// <summary>
+	/// Mass in Kg
+	/// </summary>
+	/// <returns></returns>
+	float GetPhysicalMass() const override;
+	UPrimitiveComponent* GetPhysicsRootComponent() const override;
+	/// <summary>
+	/// Get basis Vector according to Axis: XYZ
+	/// </summary>
+	/// <param name="axis"></param>
+	/// <returns></returns>
+	FVector GetBasisVector(FName axis) const override;
 #pragma endregion
 
 #pragma region IStateDriven

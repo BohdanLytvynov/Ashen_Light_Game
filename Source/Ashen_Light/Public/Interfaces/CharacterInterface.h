@@ -27,6 +27,7 @@ public:
 	virtual void Walk() = 0;
 	virtual void Run() = 0;
 	virtual void Move(const FVector& dir, float value, bool instant = false) = 0;
+	virtual void Move(const FVector& vel, bool instant = false) = 0;
 	virtual class UCapsuleComponent* GetCapsuleComponent() const = 0;
 	virtual class USkeletalMeshComponent* GetSkeletalMesh() const = 0;
 };
